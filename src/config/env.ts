@@ -23,6 +23,7 @@ const envSchema = z.object({
   DEMO_2FA_CODE: z.string().default("123456"),
   DEMO_PASSWORD: z.string().default("password123"),
   SEED_ADMIN_EMAIL: z.string().email().default("admin@platform.com"),
+  SEED_ADMIN_PASSWORD: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string(),
   APP_PUBLIC_URL: z.string().url().default("http://localhost:3000"),

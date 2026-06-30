@@ -6,26 +6,15 @@ import { db, pool } from "./index"
 import { findOne } from "./query"
 import { charges, users } from "./schema/index"
 
-async function seed() {
-  const existingAdmin = await findOne(
-    db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.email, env.SEED_ADMIN_EMAIL.toLowerCase()),
-          eq(users.isSystemAdmin, true)
-        )
-      )
+async function seedDefaultCharge() {
+  const existingCharge = await findOne(
+    db.select().from(charges).where(eq(charges.isDefault, true))
   )
 
-  if (existingAdmin) {
-    console.log("System seed already applied — skipping")
-    console.log("Run `npm run db:reset` to wipe and re-seed")
+  if (existingCharge) {
+    console.log("Default charge already exists — skipping")
     return
   }
-
-  const passwordHash = await hashPassword(env.DEMO_PASSWORD)
 
   await db.insert(charges).values({
     name: "Standard",
@@ -39,10 +28,40 @@ async function seed() {
     active: true,
   })
 
+  console.log("Created default charge")
+}
+
+async function seedSystemAdmin() {
+  const adminEmail = env.SEED_ADMIN_EMAIL.toLowerCase()
+  const passwordHash = await hashPassword(
+    env.SEED_ADMIN_PASSWORD ?? env.DEMO_PASSWORD
+  )
+
+  const existingUser = await findOne(
+    db.select().from(users).where(eq(users.email, adminEmail))
+  )
+
+  if (existingUser) {
+    await db
+      .update(users)
+      .set({
+        companyId: null,
+        name: existingUser.name || "Platform Admin",
+        passwordHash,
+        role: "owner",
+        status: "active",
+        isSystemAdmin: true,
+      })
+      .where(eq(users.email, adminEmail))
+
+    console.log(`Updated system admin: ${adminEmail}`)
+    return
+  }
+
   await db.insert(users).values({
     companyId: null,
     name: "Platform Admin",
-    email: env.SEED_ADMIN_EMAIL.toLowerCase(),
+    email: adminEmail,
     passwordHash,
     avatar: null,
     phone: null,
@@ -52,10 +71,15 @@ async function seed() {
     lastLoginAt: null,
   })
 
+  console.log(`Created system admin: ${adminEmail}`)
+}
+
+async function seed() {
+  await seedDefaultCharge()
+  await seedSystemAdmin()
+
   console.log("System seed completed")
-  console.log("  1 default charge")
-  console.log("  1 system admin user (no tenant company)")
-  console.log(`  Admin login: ${env.SEED_ADMIN_EMAIL} / ${env.DEMO_PASSWORD}`)
+  console.log(`  Admin login: ${env.SEED_ADMIN_EMAIL.toLowerCase()}`)
   console.log("  OTP codes are emailed via Resend (or logged in dev console)")
 }
 
