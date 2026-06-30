@@ -9,11 +9,17 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:worker": "tsx watch src/worker.ts",
-    "start": "tsx src/server.ts",
-    "worker:start": "tsx src/worker.ts",
-    "build": "tsc -p tsconfig.json --noEmit",
-    "vercel-build": "npm run build",
-    "db:migrate": "tsx src/db/migrate.ts",
+    "build": "npm run build:app && npm run build:server && npm run build:worker && npm run build:migrate",
+    "build:app": "esbuild src/app.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/app.js --packages=external",
+    "build:server": "esbuild src/server.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/server.js --packages=external",
+    "build:worker": "esbuild src/worker.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/worker.js --packages=external",
+    "build:migrate": "esbuild src/db/migrate.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/db/migrate.js --packages=external",
+    "vercel-build": "npm run build:app",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "worker:start": "node dist/worker.js",
+    "db:migrate": "node dist/db/migrate.js",
+    "db:migrate:dev": "tsx src/db/migrate.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate-timestamps": "tsx src/db/migrate-timestamps.ts",
@@ -53,6 +59,7 @@
     "@types/node": "^20",
     "@types/pg": "^8.15.5",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.0",
     "typescript": "^5"
   }
 }

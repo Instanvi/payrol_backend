@@ -4,7 +4,7 @@
     "noEmit": false,
     "module": "ES2022",
     "moduleResolution": "node",
-    "outDir": "./src/dist",
+    "outDir": "./dist",
     "rootDir": "./src",
     "declaration": false,
     "sourceMap": true
