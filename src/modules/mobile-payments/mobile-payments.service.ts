@@ -13,7 +13,7 @@ import { findOne } from "../../db/query"
 import { mobilePaymentTransactions } from "../../db/schema"
 import {
   disburseJobId,
-  paymentQueue,
+  getPaymentQueue,
 } from "../../queues/payment.queue"
 import { walletsService } from "../wallets/wallets.service"
 import { instanviPaymentsClient } from "./instanvi-payments.client"
@@ -198,7 +198,7 @@ export const mobilePaymentsService = {
     const jobId = disburseJobId(companyId, idempotencyKey)
 
     try {
-      const job = await paymentQueue.add(
+      const job = await getPaymentQueue().add(
         "disburse",
         {
           companyId,
@@ -285,7 +285,7 @@ export const mobilePaymentsService = {
       },
     })
 
-    const added = await paymentQueue.addBulk(jobs)
+    const added = await getPaymentQueue().addBulk(jobs)
 
     return {
       queued: added.map((job, index) => ({

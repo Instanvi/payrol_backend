@@ -26,21 +26,35 @@ export type DisburseJobName = "disburse"
 export const redisConnection = {
   url: env.REDIS_URL,
   maxRetriesPerRequest: null,
+  lazyConnect: true,
+  enableOfflineQueue: false,
 } as const
 
-export const paymentQueue = new Queue<
+let paymentQueueInstance: Queue<
   DisburseJobData,
   void,
   DisburseJobName
->(PAYMENT_QUEUE_NAME, {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: env.PAYMENT_QUEUE_ATTEMPTS,
-    backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  },
-})
+> | null = null
+
+export function getPaymentQueue() {
+  if (!paymentQueueInstance) {
+    paymentQueueInstance = new Queue<
+      DisburseJobData,
+      void,
+      DisburseJobName
+    >(PAYMENT_QUEUE_NAME, {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: env.PAYMENT_QUEUE_ATTEMPTS,
+        backoff: { type: "exponential", delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    })
+  }
+
+  return paymentQueueInstance
+}
 
 export function disburseJobId(companyId: string, idempotencyKey: string) {
   return `disburse:${companyId}:${idempotencyKey}`

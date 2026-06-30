@@ -25,7 +25,9 @@ const envSchema = z.object({
   SEED_ADMIN_EMAIL: z.string().email().default("admin@platform.com"),
   SEED_ADMIN_PASSWORD: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM_EMAIL: z.string(),
+  RESEND_FROM_EMAIL: z
+    .string()
+    .default("Instanvi Payroll <noreply@instanvi.com>"),
   APP_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   INSTANVI_PAYMENTS_BASE_URL: z
     .string()
@@ -41,7 +43,7 @@ const envSchema = z.object({
   PAYMENT_QUEUE_CONCURRENCY: z.coerce.number().default(5),
   RUN_PAYMENT_WORKER: z
     .enum(["true", "false"])
-    .default("true")
+    .default(process.env.VERCEL ? "false" : "true")
     .transform((value) => value === "true"),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
