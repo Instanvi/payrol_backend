@@ -9,7 +9,7 @@ import { pool } from "./index"
 
 const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../drizzle"
+  "../../../drizzle"
 )
 
 async function runMigrations() {
