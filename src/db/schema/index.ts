@@ -44,6 +44,13 @@ export const companies = pgTable("companies", {
   approvedAt: text("approved_at"),
   approvedByUserId: uuid("approved_by_user_id"),
   chargeId: uuid("charge_id"),
+  instanviApiKeyEncrypted: text("instanvi_api_key_encrypted"),
+  instanviApiKeyLast4: text("instanvi_api_key_last4"),
+  instanviLocationId: text("instanvi_location_id"),
+  instanviConnectedAt: timestamp("instanvi_connected_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 })

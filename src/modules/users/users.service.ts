@@ -32,6 +32,10 @@ async function getCompany(companyId: string) {
     rejectionReason: company.rejectionReason ?? undefined,
     approvedAt: company.approvedAt ?? undefined,
     chargeId: company.chargeId ?? undefined,
+    instanviConnected: Boolean(
+      company.instanviApiKeyEncrypted?.trim() && company.instanviConnectedAt
+    ),
+    instanviLocationId: company.instanviLocationId ?? undefined,
   }
 }
 

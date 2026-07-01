@@ -16,7 +16,7 @@ import {
   getPaymentQueue,
 } from "../../queues/payment.queue"
 import { walletsService } from "../wallets/wallets.service"
-import { instanviPaymentsClient } from "./instanvi-payments.client"
+import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import type { InstanviProvider } from "./instanvi-payments.types"
 import {
   carrierToProvider,
@@ -49,7 +49,8 @@ function resolveProvider(
 }
 
 export const mobilePaymentsService = {
-  async validatePayeeAccount(phone: string) {
+  async validatePayeeAccount(companyId: string, phone: string) {
+    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const carrierCheck = validateCarrierForMobileMoney(phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -59,13 +60,14 @@ export const mobilePaymentsService = {
     const provider = resolveProvider(msisdn)
 
     if (provider === "MTN_CAM") {
-      await instanviPaymentsClient.verifyAccountHolderActive(
+      await instanvi.verifyAccountHolderActive(
         msisdn,
         "DEPOSIT"
       )
     }
 
     await paymentLogService.info({
+      companyId,
       event: "mobile_payments.account.validated",
       message: "Payee mobile money account validated",
       metadata: {
@@ -85,6 +87,7 @@ export const mobilePaymentsService = {
   },
 
   async collect(companyId: string, input: CollectInput) {
+    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const wallet = await walletsService.getByCompanyId(companyId)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
@@ -95,7 +98,7 @@ export const mobilePaymentsService = {
     const provider = resolveProvider(msisdn, input.provider)
 
     if (provider === "MTN_CAM") {
-      await instanviPaymentsClient.verifyAccountHolderActive(
+      await instanvi.verifyAccountHolderActive(
         msisdn,
         "COLLECTION"
       )
@@ -111,7 +114,7 @@ export const mobilePaymentsService = {
       metadata: { amount: input.amount, phone: msisdn, provider },
     })
 
-    const payment = await instanviPaymentsClient.makePayment({
+    const payment = await instanvi.makePayment({
       type: "COLLECTION",
       amount: toInstanviAmount(input.amount, input.currency),
       phone_number: toInstanviPhoneNumber(msisdn),
@@ -163,6 +166,7 @@ export const mobilePaymentsService = {
     idempotencyKey: string,
     options?: QueueDisburseOptions
   ) {
+    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -185,7 +189,7 @@ export const mobilePaymentsService = {
     })
 
     if (provider === "MTN_CAM") {
-      await instanviPaymentsClient.verifyAccountHolderActive(msisdn, "DEPOSIT")
+      await instanvi.verifyAccountHolderActive(msisdn, "DEPOSIT")
     }
 
     if (!options?.skipBalanceCheck) {
@@ -248,6 +252,8 @@ export const mobilePaymentsService = {
     items: BulkDisburseItem[],
     options?: { payRunId?: string }
   ) {
+    await companyIntegrationsService.getInstanviCredentials(companyId)
+
     if (items.length === 0) {
       return { queued: [] as Array<{ idempotencyKey: string; jobId: string }> }
     }
@@ -300,6 +306,7 @@ export const mobilePaymentsService = {
     input: DisburseInput,
     meta?: ExecuteDisburseMeta
   ) {
+    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -314,7 +321,7 @@ export const mobilePaymentsService = {
     }
 
     if (provider === "MTN_CAM") {
-      await instanviPaymentsClient.verifyAccountHolderActive(msisdn, "DEPOSIT")
+      await instanvi.verifyAccountHolderActive(msisdn, "DEPOSIT")
     }
 
     const externalId = input.externalId ?? createId()
@@ -332,7 +339,7 @@ export const mobilePaymentsService = {
       },
     })
 
-    const payment = await instanviPaymentsClient.makePayment({
+    const payment = await instanvi.makePayment({
       type: "DEPOSIT",
       amount: toInstanviAmount(input.amount, input.currency),
       phone_number: toInstanviPhoneNumber(msisdn),
@@ -387,6 +394,7 @@ export const mobilePaymentsService = {
   },
 
   async syncStatus(transactionId: string, companyId: string) {
+    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const txn = await findOne(
       db
         .select()
@@ -398,7 +406,7 @@ export const mobilePaymentsService = {
       throw AppError.notFound("Mobile payment transaction not found")
     }
 
-    const remote = await instanviPaymentsClient.getTransaction(transactionId)
+    const remote = await instanvi.getTransaction(transactionId)
     const status = mapProviderStatus(remote.status)
     const now = nowIso()
     const wasPending = txn.status === "pending"

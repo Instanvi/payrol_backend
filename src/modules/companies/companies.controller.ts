@@ -5,6 +5,7 @@ import { requireTenantAuth } from "../../common/utils/auth-context"
 import { getRouteParam } from "../../common/utils/route-param"
 import { sendCreated, sendSuccess } from "../../common/utils/response"
 import { walletsService } from "../wallets/wallets.service"
+import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import { companiesService } from "./companies.service"
 
 export const getMyCompany = asyncHandler(async (req: Request, res: Response) => {
@@ -63,5 +64,46 @@ export const getCompanyWallet = asyncHandler(
     const auth = requireTenantAuth(req)
     const wallet = await walletsService.getByCompanyId(auth.companyId)
     sendSuccess(res, wallet)
+  }
+)
+
+export const getInstanviIntegration = asyncHandler(
+  async (req: Request, res: Response) => {
+    const auth = requireTenantAuth(req)
+    const config = await companyIntegrationsService.getMaskedConfig(
+      auth.companyId
+    )
+    sendSuccess(res, config)
+  }
+)
+
+export const saveInstanviIntegration = asyncHandler(
+  async (req: Request, res: Response) => {
+    const auth = requireTenantAuth(req)
+    const config = await companyIntegrationsService.saveInstanviKeys(
+      auth.companyId,
+      req.body
+    )
+    sendSuccess(res, config)
+  }
+)
+
+export const testInstanviIntegration = asyncHandler(
+  async (req: Request, res: Response) => {
+    const auth = requireTenantAuth(req)
+    const result = await companyIntegrationsService.testInstanviConnection(
+      auth.companyId
+    )
+    sendSuccess(res, result)
+  }
+)
+
+export const removeInstanviIntegration = asyncHandler(
+  async (req: Request, res: Response) => {
+    const auth = requireTenantAuth(req)
+    const config = await companyIntegrationsService.clearInstanviKeys(
+      auth.companyId
+    )
+    sendSuccess(res, config)
   }
 )

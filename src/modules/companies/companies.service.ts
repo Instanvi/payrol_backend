@@ -35,6 +35,10 @@ function mapKycDocument(row: KycDocumentRow) {
 }
 
 function mapCompany(row: typeof companies.$inferSelect) {
+  const instanviConnected = Boolean(
+    row.instanviApiKeyEncrypted?.trim() && row.instanviConnectedAt
+  )
+
   return {
     id: row.id,
     name: row.name,
@@ -50,6 +54,8 @@ function mapCompany(row: typeof companies.$inferSelect) {
     rejectionReason: row.rejectionReason ?? undefined,
     approvedAt: row.approvedAt ?? undefined,
     chargeId: row.chargeId ?? undefined,
+    instanviConnected,
+    instanviLocationId: row.instanviLocationId ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

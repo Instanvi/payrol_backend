@@ -11,7 +11,7 @@ import { env } from "../../config/env"
 import { db } from "../../db"
 import { findOne } from "../../db/query"
 import { employees } from "../../db/schema"
-import { instanviPaymentsClient } from "../mobile-payments/instanvi-payments.client"
+import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import {
   carrierToProvider,
   isMobileMoneyCarrier,
@@ -127,17 +127,18 @@ export const employeesAccountService = {
     const provider = carrierToProvider(parsed.carrier)
 
     try {
+      const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
       let accountHolderName: string | null = null
 
       if (provider === "MTN_CAM") {
-        await instanviPaymentsClient.verifyAccountHolderActive(
+        await instanvi.verifyAccountHolderActive(
           parsed.national,
           "DEPOSIT"
         )
 
         try {
           const basicInfo =
-            await instanviPaymentsClient.verifyAccountHolderBasicInfo(
+            await instanvi.verifyAccountHolderBasicInfo(
               parsed.national,
               "DEPOSIT"
             )
