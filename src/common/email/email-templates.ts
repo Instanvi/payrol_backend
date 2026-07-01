@@ -17,7 +17,7 @@ export function baseEmailLayout(input: {
   const preheader = input.preheader ?? input.title
   const footer =
     input.footerNote ??
-    "You received this email because of activity on your Instanvi Payroll account."
+    "This is an automated message. Please do not reply to this email."
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -26,26 +26,26 @@ export function baseEmailLayout(input: {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(input.title)}</title>
   </head>
-  <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333333;">
     <span style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</span>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;padding:32px 16px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f5f5;padding:24px 16px;">
       <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #e4e4e7;">
+        <td align="left">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;">
             <tr>
-              <td style="padding:24px 28px;background:#ffffff;border-bottom:1px solid #e4e4e7;">
-                <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#237804;font-weight:600;">${BRAND}</div>
-                <div style="font-size:18px;font-weight:600;margin-top:6px;color:#237804;">${escapeHtml(input.title)}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:28px;">
+              <td style="padding:32px 40px 24px;text-align:left;">
                 ${input.bodyHtml}
               </td>
             </tr>
             <tr>
-              <td style="padding:0 28px 24px;font-size:12px;line-height:1.6;color:#71717a;">
-                ${escapeHtml(footer)}
+              <td style="padding:0 40px 32px;">
+                <hr style="border:0;border-top:1px solid #e0e0e0;margin:0 0 16px;" />
+                <p style="margin:0;font-size:11px;line-height:1.5;color:#666666;text-align:left;">
+                  ${escapeHtml(footer)}
+                </p>
+                <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#666666;text-align:left;">
+                  &copy; ${new Date().getFullYear()} ${BRAND}. All rights reserved.
+                </p>
               </td>
             </tr>
           </table>
@@ -66,17 +66,17 @@ export function otpEmailTemplate(input: {
   const minutes = input.expiresMinutes
 
   const bodyHtml = `
-    <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">Hi ${name},</p>
-    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">
-      Use this one-time code to finish signing in to your payroll dashboard.
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#333333;">Hello ${name},</p>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#333333;">
+      Use the verification code below to finish signing in to your payroll dashboard.
     </p>
-    <div style="margin:0 0 16px;padding:14px 16px;background:#ffffff;border:1px solid #e4e4e7;text-align:left;">
-      <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;margin-bottom:6px;">Verification code</div>
-      <div style="font-size:20px;font-weight:700;letter-spacing:0.2em;color:#18181b;">${code}</div>
-    </div>
-    <p style="margin:0;font-size:13px;line-height:1.6;color:#52525b;">
-      This code expires in <strong>${minutes} minutes</strong>. If you did not try to sign in, you can safely ignore this email.
-    </p>`
+    <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#333333;">Your verification code is:</p>
+    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#333333;font-weight:bold;letter-spacing:0.15em;">${code}</p>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#333333;">
+      This code expires in ${minutes} minutes. If you did not try to sign in, you can safely ignore this email.
+    </p>
+    <p style="margin:0 0 4px;font-size:14px;line-height:1.6;color:#333333;">Thanks,</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#333333;">The ${BRAND} Team</p>`
 
   const html = baseEmailLayout({
     preheader: `Your sign-in code is ${input.code}`,
@@ -84,13 +84,16 @@ export function otpEmailTemplate(input: {
     bodyHtml,
   })
 
-  const text = `Hi ${input.recipientName || "there"},
+  const text = `Hello ${input.recipientName || "there"},
 
-Your Instanvi Payroll sign-in code is: ${input.code}
+Use the verification code below to finish signing in to your payroll dashboard.
 
-This code expires in ${minutes} minutes.
+Your verification code is: ${input.code}
 
-If you did not try to sign in, you can ignore this email.`
+This code expires in ${minutes} minutes. If you did not try to sign in, you can safely ignore this email.
+
+Thanks,
+The ${BRAND} Team`
 
   return {
     subject: `${input.code} is your Instanvi Payroll sign-in code`,
@@ -108,22 +111,23 @@ export function infoEmailTemplate(input: {
   actionUrl?: string
 }) {
   const name = escapeHtml(input.recipientName || "there")
-  const title = escapeHtml(input.title)
   const message = escapeHtml(input.message).replace(/\n/g, "<br />")
 
   const action =
     input.actionLabel && input.actionUrl
-      ? `<p style="margin:20px 0 0;">
-          <a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;padding:10px 16px;background:#237804;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;">
+      ? `<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#333333;">
+          <a href="${escapeHtml(input.actionUrl)}" style="color:#0066cc;text-decoration:underline;">
             ${escapeHtml(input.actionLabel)}
           </a>
         </p>`
       : ""
 
   const bodyHtml = `
-    <p style="margin:0 0 12px;font-size:14px;line-height:1.6;">Hi ${name},</p>
-    <p style="margin:0;font-size:14px;line-height:1.7;color:#3f3f46;">${message}</p>
-    ${action}`
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#333333;">Hello ${name},</p>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#333333;">${message}</p>
+    ${action}
+    <p style="margin:24px 0 4px;font-size:14px;line-height:1.6;color:#333333;">Thanks,</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#333333;">The ${BRAND} Team</p>`
 
   const html = baseEmailLayout({
     preheader: input.message.slice(0, 120),
@@ -131,13 +135,14 @@ export function infoEmailTemplate(input: {
     bodyHtml,
   })
 
-  const text = `Hi ${input.recipientName || "there"},
-
-${input.title}
+  const text = `Hello ${input.recipientName || "there"},
 
 ${input.message}
 
-${input.actionLabel && input.actionUrl ? `${input.actionLabel}: ${input.actionUrl}` : ""}`.trim()
+${input.actionLabel && input.actionUrl ? `${input.actionLabel}: ${input.actionUrl}` : ""}
+
+Thanks,
+The ${BRAND} Team`.trim()
 
   return {
     subject: input.title,
