@@ -1,5 +1,7 @@
 import type { Request } from "express"
 
+import { eq } from "drizzle-orm"
+
 import { paymentLogService } from "../../common/logging/payment-log.service"
 import { db } from "../../db"
 import { findOne } from "../../db/query"

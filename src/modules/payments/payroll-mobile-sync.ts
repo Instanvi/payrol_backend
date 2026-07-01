@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 
 import { nowIso } from "../../common/utils/id"
 import { db } from "../../db"
@@ -107,6 +107,7 @@ export async function syncPayRunProcessingTransactions(
         .select()
         .from(mobilePaymentTransactions)
         .where(eq(mobilePaymentTransactions.payrollTransactionId, payrollTxn.id))
+        .orderBy(desc(mobilePaymentTransactions.createdAt))
     )
 
     if (!mobileTxn) {

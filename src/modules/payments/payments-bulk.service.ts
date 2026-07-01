@@ -12,6 +12,7 @@ import type { BulkDisburseItem } from "../mobile-payments/mobile-payments.types"
 import { carrierToProvider } from "../mobile-payments/provider.utils"
 import { chargesService, calculateCharge } from "../charges/charges.service"
 import { paymentsService } from "./payments.service"
+import { syncPayRunProcessingTransactions } from "./payroll-mobile-sync"
 import { transactionsService } from "../transactions/transactions.service"
 import type { BulkDisburseInput } from "./payments.validation"
 
@@ -62,6 +63,7 @@ function filterLinesBySelection(
 
 export const paymentsBulkService = {
   async validateMobilePayRun(payRunId: string, companyId = env.DEFAULT_COMPANY_ID) {
+    await syncPayRunProcessingTransactions(payRunId, companyId)
     const payRun = await paymentsService.getById(payRunId, companyId)
     const transactions = await transactionsService.listByPayRun(payRunId, companyId)
 
@@ -250,7 +252,7 @@ export const paymentsBulkService = {
           currency: disburseCurrency,
           phone: line.phone!,
           provider: provider ?? undefined,
-          externalId: line.transactionId,
+          externalId: `${line.transactionId}:${idempotencyKey}`,
           payerMessage: `Payroll ${payRun.reference}`,
           payeeNote: payRun.payPeriod,
           payrollTransactionId: line.transactionId,

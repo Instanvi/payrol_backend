@@ -1,6 +1,7 @@
 import axios, { isAxiosError, type AxiosInstance } from "axios"
 
 import { AppError } from "../../common/errors/AppError"
+import { attachHttpClientLogging } from "../../common/logging/http-client-logger"
 import { env } from "../../config/env"
 import type {
   InstanviEnvelope,
@@ -53,6 +54,8 @@ const instanviHttp: AxiosInstance = axios.create({
   timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 })
+
+attachHttpClientLogging(instanviHttp, "instanvi")
 
 export type InstanviPaymentsClient = ReturnType<typeof createInstanviClient>
 

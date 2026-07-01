@@ -24,6 +24,15 @@ function expiryIso() {
   return new Date(Date.now() + TTL_MS).toISOString();
 }
 
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  )
+}
+
 export const idempotencyService = {
   hashPayload,
 
@@ -69,6 +78,26 @@ export const idempotencyService = {
       }
 
       if (existing.status === "processing") {
+        const createdAtMs = Date.parse(existing.createdAt)
+        const stale =
+          Number.isFinite(createdAtMs) &&
+          Date.now() - createdAtMs > 5 * 60 * 1000
+
+        if (stale) {
+          await db
+            .update(idempotencyKeys)
+            .set({
+              status: "processing",
+              requestHash,
+              responseBody: null,
+              statusCode: null,
+              expiresAt: expiryIso(),
+            })
+            .where(eq(idempotencyKeys.id, existing.id))
+
+          return { replay: false as const, requestHash };
+        }
+
         return {
           replay: true as const,
           statusCode: 409,
@@ -97,18 +126,25 @@ export const idempotencyService = {
     }
 
     const now = nowIso();
-    await db.insert(idempotencyKeys).values({
-      id: createId(),
-      companyId: params.companyId,
-      key: params.key,
-      operation: params.operation,
-      requestHash,
-      responseBody: null,
-      statusCode: null,
-      status: "processing",
-      createdAt: now,
-      expiresAt: expiryIso(),
-    });
+    try {
+      await db.insert(idempotencyKeys).values({
+        id: createId(),
+        companyId: params.companyId,
+        key: params.key,
+        operation: params.operation,
+        requestHash,
+        responseBody: null,
+        statusCode: null,
+        status: "processing",
+        createdAt: now,
+        expiresAt: expiryIso(),
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return this.begin(params);
+      }
+      throw error;
+    }
 
     await paymentLogService.info({
       companyId: params.companyId,

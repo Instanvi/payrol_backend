@@ -260,13 +260,40 @@ export const mobilePaymentsService = {
       },
     })
 
-    const added = await getPaymentQueue().addBulk(jobs)
+    try {
+      const added = await getPaymentQueue().addBulk(jobs)
 
-    return {
-      queued: added.map((job, index) => ({
-        idempotencyKey: items[index]!.idempotencyKey,
-        jobId: job.id ?? jobs[index]!.opts.jobId!,
-      })),
+      return {
+        queued: added.map((job, index) => ({
+          idempotencyKey: items[index]!.idempotencyKey,
+          jobId: job.id ?? jobs[index]!.opts.jobId!,
+        })),
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        /already exists/i.test(error.message)
+      ) {
+        return {
+          queued: jobs.map((job) => ({
+            idempotencyKey: job.data.idempotencyKey,
+            jobId: job.opts.jobId!,
+          })),
+        }
+      }
+
+      if (
+        error instanceof Error &&
+        /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|Redis|Connection is closed/i.test(
+          error.message
+        )
+      ) {
+        throw AppError.validation(
+          "Payment queue is unavailable. Check Redis and try again."
+        )
+      }
+
+      throw error
     }
   },
 

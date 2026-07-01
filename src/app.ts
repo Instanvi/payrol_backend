@@ -1,10 +1,10 @@
 import cors from "cors"
 import express from "express"
 import helmet from "helmet"
-import morgan from "morgan"
 
 import { env } from "./config/env"
 import { errorHandler } from "./common/middleware/errorHandler"
+import { httpLogger } from "./common/middleware/http-logger"
 import { notFoundHandler } from "./common/middleware/notFoundHandler"
 import { apiRouter } from "./routes/index"
 
@@ -19,7 +19,7 @@ export function createApp() {
     })
   )
   app.use(express.json({ limit: "6mb" }))
-  app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"))
+  app.use(httpLogger)
 
   app.get("/health", (_req, res) => {
     res.json({ success: true, data: { status: "ok" } })

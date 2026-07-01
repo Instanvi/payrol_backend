@@ -56,7 +56,11 @@ let paymentQueueInstance: Queue<
   DisburseJobName
 > | null = null
 
-export function getPaymentQueue() {
+export function getPaymentQueue(): Queue<
+  DisburseJobData,
+  void,
+  DisburseJobName
+> {
   if (!paymentQueueInstance) {
     paymentQueueInstance = new Queue<
       DisburseJobData,
@@ -73,7 +77,12 @@ export function getPaymentQueue() {
     })
   }
 
-  return paymentQueueInstance
+  const queue = paymentQueueInstance
+  if (!queue) {
+    throw new Error("Payment queue failed to initialize")
+  }
+
+  return queue
 }
 
 export function disburseJobId(companyId: string, idempotencyKey: string) {

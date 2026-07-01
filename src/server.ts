@@ -3,13 +3,17 @@ import type { Worker } from "bullmq"
 import { createApp } from "./app"
 import { env } from "./config/env"
 import { logger } from "./common/logger"
-import { verifyRedisConnection } from "./queues/payment.queue"
+import {
+  verifyRedisConnection,
+  type DisburseJobData,
+  type DisburseJobName,
+} from "./queues/payment.queue"
 import { startPaymentWorker } from "./queues/payment.worker"
 import { pool } from "./db"
 
 const app = createApp()
 
-let worker: Worker | null = null
+let worker: Worker<DisburseJobData, void, DisburseJobName> | null = null
 
 const server = app.listen(env.PORT, () => {
   logger.info(
