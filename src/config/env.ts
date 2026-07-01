@@ -36,7 +36,7 @@ const envSchema = z.object({
   INSTANVI_LOCATION_ID: z.string().optional(),
   INTEGRATION_ENCRYPTION_KEY: z
     .string()
-    .default("dev-integration-encryption-key-32b!"),
+    .default("dev-instanvi-payroll-key-32bytes!"),
   INSTANVI_CALLBACK_URL: z
     .string()
     .default("http://localhost:4000/api/payments/mobile/webhook"),

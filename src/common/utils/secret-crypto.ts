@@ -8,22 +8,29 @@ const IV_LENGTH = 12
 
 function resolveEncryptionKey(): Buffer {
   const raw = env.INTEGRATION_ENCRYPTION_KEY.trim()
+  if (!raw) {
+    throw AppError.validation(
+      "INTEGRATION_ENCRYPTION_KEY is not configured. Set it in the environment."
+    )
+  }
+
   if (raw.length === 64 && /^[0-9a-f]+$/i.test(raw)) {
     return Buffer.from(raw, "hex")
   }
 
-  const decoded = Buffer.from(raw, "base64")
-  if (decoded.length === 32) {
-    return decoded
-  }
-
-  if (raw.length === 32) {
+  if (Buffer.byteLength(raw, "utf8") === 32) {
     return Buffer.from(raw, "utf8")
   }
 
-  throw AppError.validation(
-    "INTEGRATION_ENCRYPTION_KEY must be 32 bytes (utf8), 32-byte base64, or 64-char hex"
-  )
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) {
+    const decoded = Buffer.from(raw, "base64")
+    if (decoded.length === 32) {
+      return decoded
+    }
+  }
+
+  // Accept any other non-empty secret by deriving a stable 32-byte key.
+  return crypto.createHash("sha256").update(raw, "utf8").digest()
 }
 
 export function encryptSecret(plaintext: string): string {
