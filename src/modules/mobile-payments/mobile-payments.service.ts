@@ -16,6 +16,7 @@ import {
   getPaymentQueue,
 } from "../../queues/payment.queue"
 import { walletsService } from "../wallets/wallets.service"
+import { syncLinkedPayrollTransaction } from "../payments/payroll-mobile-sync"
 import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import type { InstanviProvider } from "./instanvi-payments.types"
 import {
@@ -50,7 +51,6 @@ function resolveProvider(
 
 export const mobilePaymentsService = {
   async validatePayeeAccount(companyId: string, phone: string) {
-    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const carrierCheck = validateCarrierForMobileMoney(phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -59,17 +59,10 @@ export const mobilePaymentsService = {
     const msisdn = carrierCheck.parsed.national
     const provider = resolveProvider(msisdn)
 
-    if (provider === "MTN_CAM") {
-      await instanvi.verifyAccountHolderActive(
-        msisdn,
-        "DEPOSIT"
-      )
-    }
-
     await paymentLogService.info({
       companyId,
       event: "mobile_payments.account.validated",
-      message: "Payee mobile money account validated",
+      message: "Payee mobile money account validated by carrier",
       metadata: {
         phone: msisdn,
         carrier: carrierCheck.parsed.carrier,
@@ -96,13 +89,6 @@ export const mobilePaymentsService = {
 
     const msisdn = carrierCheck.parsed.national
     const provider = resolveProvider(msisdn, input.provider)
-
-    if (provider === "MTN_CAM") {
-      await instanvi.verifyAccountHolderActive(
-        msisdn,
-        "COLLECTION"
-      )
-    }
 
     const externalId = createId()
     const now = nowIso()
@@ -166,7 +152,6 @@ export const mobilePaymentsService = {
     idempotencyKey: string,
     options?: QueueDisburseOptions
   ) {
-    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -178,7 +163,7 @@ export const mobilePaymentsService = {
     await paymentLogService.info({
       companyId,
       event: "mobile_payments.disburse.queued",
-      message: "Validating payee account before enqueueing disbursement",
+      message: "Enqueueing disbursement after carrier validation",
       metadata: {
         idempotencyKey,
         amount: input.amount,
@@ -187,10 +172,6 @@ export const mobilePaymentsService = {
         provider,
       },
     })
-
-    if (provider === "MTN_CAM") {
-      await instanvi.verifyAccountHolderActive(msisdn, "DEPOSIT")
-    }
 
     if (!options?.skipBalanceCheck) {
       const wallet = await walletsService.getByCompanyId(companyId)
@@ -320,10 +301,6 @@ export const mobilePaymentsService = {
       throw AppError.validation("Insufficient wallet balance for disbursement")
     }
 
-    if (provider === "MTN_CAM") {
-      await instanvi.verifyAccountHolderActive(msisdn, "DEPOSIT")
-    }
-
     const externalId = input.externalId ?? createId()
     const now = nowIso()
 
@@ -445,6 +422,14 @@ export const mobilePaymentsService = {
         txn.walletId,
         txn.amount,
         `Disbursement reversal ${transactionId}`
+      )
+    }
+
+    if (txn.payrollTransactionId) {
+      await syncLinkedPayrollTransaction(
+        txn.payrollTransactionId,
+        status,
+        status === "failed" ? "Payment failed at provider" : null
       )
     }
 

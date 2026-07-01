@@ -1,11 +1,9 @@
-import { eq } from "drizzle-orm"
 import type { Request } from "express"
 
 import { paymentLogService } from "../../common/logging/payment-log.service"
-import { nowIso } from "../../common/utils/id"
 import { db } from "../../db"
 import { findOne } from "../../db/query"
-import { mobilePaymentTransactions, payrollTransactions } from "../../db/schema"
+import { mobilePaymentTransactions } from "../../db/schema"
 import { mobilePaymentsService } from "./mobile-payments.service"
 
 function extractTransactionId(req: Request): string | null {
@@ -34,33 +32,6 @@ function extractTransactionId(req: Request): string | null {
   }
 
   return null
-}
-
-async function syncLinkedPayrollTransaction(
-  payrollTransactionId: string,
-  status: "successful" | "failed" | "pending",
-  failureReason?: string | null
-) {
-  const now = nowIso()
-  const payrollStatus =
-    status === "successful"
-      ? ("completed" as const)
-      : status === "failed"
-        ? ("failed" as const)
-        : ("processing" as const)
-
-  await db
-    .update(payrollTransactions)
-    .set({
-      status: payrollStatus,
-      paidAt: status === "successful" ? now : null,
-      failureReason:
-        status === "failed"
-          ? (failureReason ?? "Mobile money disbursement failed")
-          : null,
-      updatedAt: now,
-    })
-    .where(eq(payrollTransactions.id, payrollTransactionId))
 }
 
 export const mobilePaymentsWebhookService = {
@@ -116,14 +87,6 @@ export const mobilePaymentsWebhookService = {
       transactionId,
       txn.companyId
     )
-
-    if (txn.payrollTransactionId) {
-      await syncLinkedPayrollTransaction(
-        txn.payrollTransactionId,
-        result.status,
-        result.failureReason
-      )
-    }
 
     await paymentLogService.info({
       companyId: txn.companyId,

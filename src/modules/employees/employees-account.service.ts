@@ -11,11 +11,7 @@ import { env } from "../../config/env"
 import { db } from "../../db"
 import { findOne } from "../../db/query"
 import { employees } from "../../db/schema"
-import { companyIntegrationsService } from "../integrations/company-integrations.service"
-import {
-  carrierToProvider,
-  isMobileMoneyCarrier,
-} from "../mobile-payments/provider.utils"
+import { isMobileMoneyCarrier } from "../mobile-payments/provider.utils"
 
 export interface EmployeeAccountValidation {
   employeeId: string
@@ -124,84 +120,33 @@ export const employeesAccountService = {
       }
     }
 
-    const provider = carrierToProvider(parsed.carrier)
+    const result = {
+      carrier: parsed.carrier,
+      accountValid: true,
+      error: null,
+    }
+    await persistValidation(employeeId, companyId, result)
 
-    try {
-      const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
-      let accountHolderName: string | null = null
-
-      if (provider === "MTN_CAM") {
-        await instanvi.verifyAccountHolderActive(
-          parsed.national,
-          "DEPOSIT"
-        )
-
-        try {
-          const basicInfo =
-            await instanvi.verifyAccountHolderBasicInfo(
-              parsed.national,
-              "DEPOSIT"
-            )
-          const { given_name, family_name } = basicInfo.result
-          accountHolderName = [given_name, family_name].filter(Boolean).join(" ") || null
-        } catch {
-          // Basic info is optional for payroll eligibility.
-        }
-      }
-
-      const result = {
-        carrier: parsed.carrier,
-        accountValid: true,
-        error: null,
-      }
-      await persistValidation(employeeId, companyId, result)
-
-      await paymentLogService.info({
-        companyId,
-        event: "employee.account.validated",
-        message: `Employee mobile account validated: ${row.name}`,
-        metadata: {
-          employeeId,
-          phone: parsed.national,
-          carrier: parsed.carrier,
-          provider,
-          accountHolderName,
-        },
-      })
-
-      return {
-        employeeId: row.id,
-        name: row.name,
+    await paymentLogService.info({
+      companyId,
+      event: "employee.account.validated",
+      message: `Employee mobile account validated by carrier: ${row.name}`,
+      metadata: {
+        employeeId,
         phone: parsed.national,
         carrier: parsed.carrier,
-        accountValid: true,
-        mobileEligible: true,
-        validatedAt: nowIso(),
-        error: null,
-        accountHolderName,
-      }
-    } catch (error) {
-      const message =
-        error instanceof AppError
-          ? error.message
-          : "Mobile money account validation failed"
-      const result = {
-        carrier: parsed.carrier,
-        accountValid: false,
-        error: message,
-      }
-      await persistValidation(employeeId, companyId, result)
+      },
+    })
 
-      return {
-        employeeId: row.id,
-        name: row.name,
-        phone: parsed.national,
-        carrier: parsed.carrier,
-        accountValid: false,
-        mobileEligible: false,
-        validatedAt: nowIso(),
-        error: message,
-      }
+    return {
+      employeeId: row.id,
+      name: row.name,
+      phone: parsed.national,
+      carrier: parsed.carrier,
+      accountValid: true,
+      mobileEligible: true,
+      validatedAt: nowIso(),
+      error: null,
     }
   },
 

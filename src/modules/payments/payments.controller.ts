@@ -8,6 +8,7 @@ import { getRouteParam } from "../../common/utils/route-param"
 import { sendCreated, sendPaginated, sendSuccess } from "../../common/utils/response"
 import { listQuerySchema, paginateList } from "../../common/utils/pagination"
 import { transactionsService } from "../transactions/transactions.service"
+import { syncPayRunProcessingTransactions } from "./payroll-mobile-sync"
 import { paymentsBulkService } from "./payments-bulk.service"
 import { paymentsService } from "./payments.service"
 
@@ -51,7 +52,9 @@ export const updatePaymentStatus = asyncHandler(
 export const getPaymentTransactions = asyncHandler(
   async (req: Request, res: Response) => {
     const auth = requireTenantAuth(req)
-    await paymentsService.getById(getRouteParam(req, "id"), auth.companyId)
+    const payRunId = getRouteParam(req, "id")
+    await paymentsService.getById(payRunId, auth.companyId)
+    await syncPayRunProcessingTransactions(payRunId, auth.companyId)
     const data = await transactionsService.listByPayRun(
       getRouteParam(req, "id"),
       auth.companyId

@@ -4,6 +4,7 @@ import { paymentLogService } from "../common/logging/payment-log.service"
 import { logger } from "../common/logger"
 import { env } from "../config/env"
 import { mobilePaymentsService } from "../modules/mobile-payments/mobile-payments.service"
+import { syncLinkedPayrollTransaction } from "../modules/payments/payroll-mobile-sync"
 import {
   PAYMENT_QUEUE_NAME,
   redisConnection,
@@ -27,7 +28,7 @@ export function startPaymentWorker() {
         },
       })
 
-      await mobilePaymentsService.executeDisburse(
+      const result = await mobilePaymentsService.executeDisburse(
         job.data.companyId,
         job.data.input,
         {
@@ -37,6 +38,22 @@ export function startPaymentWorker() {
           skipWalletDebit: job.data.skipWalletDebit,
         }
       )
+
+      try {
+        await mobilePaymentsService.syncStatus(
+          result.transactionId,
+          job.data.companyId
+        )
+      } catch (syncError) {
+        logger.warn(
+          {
+            err: syncError,
+            jobId: job.id,
+            transactionId: result.transactionId,
+          },
+          "Post-disburse status sync failed; waiting for webhook"
+        )
+      }
 
       await paymentLogService.info({
         companyId: job.data.companyId,
@@ -69,6 +86,18 @@ export function startPaymentWorker() {
           attemptsMade: job.attemptsMade,
         },
       })
+
+      const maxAttempts = job.opts.attempts ?? env.PAYMENT_QUEUE_ATTEMPTS
+      if (
+        job.attemptsMade >= maxAttempts &&
+        job.data.input.payrollTransactionId
+      ) {
+        void syncLinkedPayrollTransaction(
+          job.data.input.payrollTransactionId,
+          "failed",
+          error.message
+        )
+      }
     }
   })
 

@@ -78,11 +78,9 @@ export const paymentsBulkService = {
     const phoneByEmployee = new Map(
       employeeRows.map((row) => [row.id, row.phone ?? null])
     )
-    const employeeById = new Map(employeeRows.map((row) => [row.id, row]))
 
     const lines: MobilePayRunLine[] = transactions.map((txn) => {
       const phone = phoneByEmployee.get(txn.employeeId) ?? null
-      const employee = employeeById.get(txn.employeeId)
       const base = {
         transactionId: txn.id,
         employeeId: txn.employeeId,
@@ -90,8 +88,6 @@ export const paymentsBulkService = {
         amount: txn.amount,
         currency: txn.currency,
         transactionStatus: txn.status,
-        accountChecked: employee?.mobileAccountValid != null,
-        mobileAccountValid: employee?.mobileAccountValid ?? null,
       }
 
       if (!phone) {
@@ -101,49 +97,30 @@ export const paymentsBulkService = {
           carrier: "unknown" as const,
           valid: false,
           mobileEligible: false,
+          accountChecked: true,
+          mobileAccountValid: false,
           error: "Employee has no phone number on file",
         }
       }
 
-      const carrier =
-        (employee?.mobileCarrier as MobilePayRunLine["carrier"] | null) ??
-        detectCarrier(phone).carrier
       const parsed = detectCarrier(phone)
-      const storedValid = employee?.mobileAccountValid === true
-      const storedInvalid = employee?.mobileAccountValid === false
-
-      if (storedInvalid) {
-        return {
-          ...base,
-          phone: parsed.national || phone,
-          carrier,
-          valid: parsed.valid,
-          mobileEligible: false,
-          error:
-            employee?.mobileAccountValidationError ??
-            "Employee mobile account is not valid",
-        }
-      }
-
-      const prefixEligible =
-        parsed.valid &&
-        isMobileCarrier(parsed.carrier) &&
-        txn.status === "pending"
+      const hasMobileCarrier = parsed.valid && isMobileCarrier(parsed.carrier)
       const mobileEligible =
-        txn.status === "pending" &&
-        (storedValid || prefixEligible) &&
-        isMobileCarrier(carrier)
+        txn.status === "pending" && hasMobileCarrier
 
       return {
         ...base,
         phone: parsed.national || phone,
-        carrier,
+        carrier: parsed.carrier,
         valid: parsed.valid,
         mobileEligible,
-        error:
-          !storedValid && !prefixEligible && employee?.mobileAccountValid == null
-            ? "Employee account not validated — run validate-account first"
-            : parsed.error,
+        accountChecked: true,
+        mobileAccountValid: hasMobileCarrier,
+        error: !parsed.valid
+          ? parsed.error
+          : !hasMobileCarrier
+            ? `Carrier ${parsed.carrier} is not supported for mobile money`
+            : undefined,
       }
     })
 
