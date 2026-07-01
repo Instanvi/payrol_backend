@@ -86,5 +86,7 @@ export function getPaymentQueue(): Queue<
 }
 
 export function disburseJobId(companyId: string, idempotencyKey: string) {
-  return `disburse:${companyId}:${idempotencyKey}`
+  const safeCompanyId = companyId.replace(/[^a-zA-Z0-9_-]/g, "_")
+  const safeKey = idempotencyKey.replace(/[^a-zA-Z0-9_-]/g, "_")
+  return `disburse_${safeCompanyId}_${safeKey}`
 }

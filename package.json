@@ -25,7 +25,9 @@
     "db:migrate-charges": "tsx src/db/migrate-charges.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:setup": "npm run db:push && npm run db:seed",
-    "db:reset": "tsx src/db/reset.ts && npm run db:setup"
+    "db:reset": "tsx src/db/reset.ts && npm run db:setup",
+    "test:disburse": "tsx scripts/test-disburse.ts",
+    "test:verify-account": "tsx scripts/test-verify-account.ts"
   },
   "dependencies": {
     "axios": "^1.18.1",

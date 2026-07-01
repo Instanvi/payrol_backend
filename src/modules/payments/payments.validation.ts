@@ -6,6 +6,7 @@ export const createPaymentSchema = z.object({
   description: z.string().optional(),
   amount: z.number().positive(),
   currency: z.enum(["USD", "EUR", "GBP", "XAF"]),
+  taxRate: z.number().min(0).max(100).optional(),
   scheduledAt: z.string().optional(),
   projectId: z.string().uuid(),
   employeeIds: z.array(z.string().min(1)).min(1),

@@ -31,7 +31,7 @@ const envSchema = z.object({
   APP_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
   INSTANVI_PAYMENTS_BASE_URL: z
     .string()
-    .default("http://localhost:3001/api/integration/payments"),
+    .default("https://api.payments.instanvi.com/api/paiments/integration/payments"),
   INSTANVI_API_KEY: z.string().optional(),
   INSTANVI_LOCATION_ID: z.string().optional(),
   INTEGRATION_ENCRYPTION_KEY: z.string().optional(),

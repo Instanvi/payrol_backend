@@ -3,9 +3,7 @@ import { and, eq } from "drizzle-orm"
 import { AppError } from "../../common/errors/AppError"
 import { createId, nowIso } from "../../common/utils/id"
 import {
-  amountsFromSalaries,
-  computeDeductions,
-  computeNetPay,
+  payrollLinesFromEmployees,
   mapPayRunStatusToTransactionStatus,
 } from "../../common/utils/payroll"
 import { env } from "../../config/env"
@@ -64,6 +62,7 @@ async function createTransactionsForPayRun(
     payPeriod: string
     currency: string
     amount: number
+    taxRate?: number
     status: PayRunStatus
     createdAt: string
     projectId?: string
@@ -72,15 +71,22 @@ async function createTransactionsForPayRun(
     ReturnType<typeof employeesService.getActiveByIds>
   >
 ) {
-  const grossAmounts = amountsFromSalaries(selectedEmployees, input.amount)
+  const taxRate = input.taxRate ?? 0
+  const payrollLines = payrollLinesFromEmployees(
+    selectedEmployees,
+    input.amount,
+    taxRate
+  )
   const txnStatus = mapPayRunStatusToTransactionStatus(input.status)
   const paidAt = input.status === "completed" ? input.createdAt : null
   const now = input.createdAt
 
   for (const [index, employee] of selectedEmployees.entries()) {
-    const gross = grossAmounts[index] ?? 0
-    const deductions = computeDeductions(gross)
-    const net = computeNetPay(gross, deductions)
+    const line = payrollLines[index] ?? {
+      grossAmount: 0,
+      deductions: 0,
+      netPay: 0,
+    }
 
     await db.insert(payrollTransactions).values({
       id: createId(),
@@ -92,9 +98,9 @@ async function createTransactionsForPayRun(
       employeeId: employee.id,
       employeeName: employee.name,
       employeeEmail: employee.email,
-      grossAmount: gross,
-      deductions,
-      amount: net,
+      grossAmount: line.grossAmount,
+      deductions: line.deductions,
+      amount: line.netPay,
       currency: input.currency,
       employeePhone: employee.phone ?? null,
       reference: `${input.reference}-${String(index + 1).padStart(3, "0")}`,
@@ -200,6 +206,7 @@ export const paymentsService = {
         payPeriod: input.payPeriod,
         currency: input.currency,
         amount: input.amount,
+        taxRate: input.taxRate ?? 0,
         status,
         createdAt,
         projectId: input.projectId,
