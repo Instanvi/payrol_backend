@@ -10,7 +10,6 @@ import { employees, payRuns, payrollTransactions } from "../../db/schema"
 import { mobilePaymentsService } from "../mobile-payments/mobile-payments.service"
 import type { BulkDisburseItem } from "../mobile-payments/mobile-payments.types"
 import { carrierToProvider } from "../mobile-payments/provider.utils"
-import { walletsService } from "../wallets/wallets.service"
 import { chargesService, calculateCharge } from "../charges/charges.service"
 import { paymentsService } from "./payments.service"
 import { transactionsService } from "../transactions/transactions.service"
@@ -29,6 +28,8 @@ export interface MobilePayRunLine {
   mobileEligible: boolean
   accountChecked: boolean
   mobileAccountValid: boolean | null
+  platformFee?: number
+  totalCharge?: number
   error?: string
 }
 
@@ -83,6 +84,8 @@ export const paymentsBulkService = {
       employeeRows.map((row) => [row.id, row.phone ?? null])
     )
 
+    const charge = await chargesService.resolveForCompany(companyId)
+
     const lines: MobilePayRunLine[] = transactions.map((txn) => {
       const phone = phoneByEmployee.get(txn.employeeId) ?? null
       const base = {
@@ -111,6 +114,9 @@ export const paymentsBulkService = {
       const hasMobileCarrier = parsed.valid && isMobileCarrier(parsed.carrier)
       const mobileEligible =
         isDisbursableTransactionStatus(txn.status) && hasMobileCarrier
+      const platformFee = mobileEligible
+        ? calculateCharge(txn.amount, charge).totalFee
+        : 0
 
       return {
         ...base,
@@ -120,6 +126,8 @@ export const paymentsBulkService = {
         mobileEligible,
         accountChecked: true,
         mobileAccountValid: hasMobileCarrier,
+        platformFee,
+        totalCharge: mobileEligible ? txn.amount + platformFee : undefined,
         error:
           txn.status === "failed"
             ? (txn.failureReason ??
@@ -154,6 +162,12 @@ export const paymentsBulkService = {
       totalMobileAmount: lines
         .filter((l) => l.mobileEligible)
         .reduce((sum, l) => sum + l.amount, 0),
+      totalPlatformFees: lines
+        .filter((l) => l.mobileEligible)
+        .reduce((sum, l) => sum + (l.platformFee ?? 0), 0),
+      totalWithFees: lines
+        .filter((l) => l.mobileEligible)
+        .reduce((sum, l) => sum + l.amount + (l.platformFee ?? 0), 0),
     }
 
     return {
@@ -211,8 +225,8 @@ export const paymentsBulkService = {
       )
     }
 
-    const wallet = await walletsService.getByCompanyId(companyId)
-    const disburseCurrency = options?.currency ?? wallet.currency
+    const disburseCurrency =
+      options?.currency ?? payRun.currency ?? eligible[0]?.currency ?? "XAF"
     const charge = await chargesService.resolveForCompany(companyId)
 
     const lineFees = eligible.map((line) => ({
@@ -222,19 +236,7 @@ export const paymentsBulkService = {
 
     const totalAmount = lineFees.reduce((sum, item) => sum + item.line.amount, 0)
     const totalPlatformFees = lineFees.reduce((sum, item) => sum + item.fee, 0)
-    const totalDebit = totalAmount + totalPlatformFees
-
-    if (wallet.balance < totalDebit) {
-      throw AppError.validation(
-        `Insufficient wallet balance. Need ${totalDebit} ${disburseCurrency} (payroll ${totalAmount} + platform fees ${totalPlatformFees}), available ${wallet.balance} ${wallet.currency}`
-      )
-    }
-
-    await walletsService.debit(
-      wallet.id,
-      totalDebit,
-      `Bulk payroll ${payRun.reference} including platform fees`
-    )
+    const totalCharge = totalAmount + totalPlatformFees
 
     const bulkItems: BulkDisburseItem[] = lineFees.map(({ line }) => {
       const provider = isMobileCarrier(line.carrier)
@@ -258,21 +260,12 @@ export const paymentsBulkService = {
 
     let queuedJobs: Array<{ idempotencyKey: string; jobId: string }> = []
 
-    try {
-      const result = await mobilePaymentsService.queueBulkDisburse(
-        companyId,
-        bulkItems,
-        { payRunId }
-      )
-      queuedJobs = result.queued
-    } catch (error) {
-      await walletsService.credit(
-        wallet.id,
-        totalDebit,
-        `Bulk payroll ${payRun.reference} reversal — queue failed`
-      )
-      throw error
-    }
+    const result = await mobilePaymentsService.queueBulkDisburse(
+      companyId,
+      bulkItems,
+      { payRunId }
+    )
+    queuedJobs = result.queued
 
     const queuedByKey = new Map(
       queuedJobs.map((job) => [job.idempotencyKey, job.jobId])
@@ -302,7 +295,7 @@ export const paymentsBulkService = {
         skipped: validation.lines.length - eligible.length,
         totalAmount,
         totalPlatformFees,
-        totalDebit,
+        totalCharge,
         employeeIds: options?.employeeIds,
         transactionIds: options?.transactionIds,
       },
@@ -371,7 +364,7 @@ export const paymentsBulkService = {
       currency: disburseCurrency,
       totalAmount,
       totalPlatformFees,
-      totalDebit,
+      totalCharge,
       queuedCount: queued.length,
       skippedCount: skipped.length,
       selectedCount: selectedLines.length,

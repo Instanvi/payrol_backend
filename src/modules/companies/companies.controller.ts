@@ -4,7 +4,6 @@ import { asyncHandler } from "../../common/middleware/asyncHandler"
 import { requireTenantAuth } from "../../common/utils/auth-context"
 import { getRouteParam } from "../../common/utils/route-param"
 import { sendCreated, sendSuccess } from "../../common/utils/response"
-import { walletsService } from "../wallets/wallets.service"
 import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import { companiesService } from "./companies.service"
 
@@ -56,14 +55,6 @@ export const listKycDocuments = asyncHandler(
     const auth = requireTenantAuth(req)
     const docs = await companiesService.listKycDocuments(auth.companyId)
     sendSuccess(res, docs)
-  }
-)
-
-export const getCompanyWallet = asyncHandler(
-  async (req: Request, res: Response) => {
-    const auth = requireTenantAuth(req)
-    const wallet = await walletsService.getByCompanyId(auth.companyId)
-    sendSuccess(res, wallet)
   }
 )
 

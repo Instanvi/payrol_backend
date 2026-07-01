@@ -14,7 +14,6 @@ const pool = new pg.Pool({
 const tablesWithBoth = [
   "companies",
   "charges",
-  "wallets",
   "employees",
   "pay_runs",
   "payroll_transactions",

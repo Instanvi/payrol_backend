@@ -18,7 +18,6 @@ import { authChallenges, companies, users } from "../../db/schema/index"
 import { notificationService } from "../notifications/notifications.service"
 import { memberInvitesService } from "../members/member-invites.service"
 import { passwordResetService } from "./password-reset.service"
-import { walletsService } from "../wallets/wallets.service"
 import { usersService } from "../users/users.service"
 import type {
   AcceptInviteInput,
@@ -124,11 +123,6 @@ export const authService = {
       onboardingStep: "profile",
       createdAt: now,
       updatedAt: now,
-    })
-
-    await walletsService.createForCompany(companyId, {
-      currency: "XAF",
-      initialBalance: 0,
     })
 
     const user = {

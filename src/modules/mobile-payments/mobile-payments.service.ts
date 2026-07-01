@@ -15,7 +15,6 @@ import {
   disburseJobId,
   getPaymentQueue,
 } from "../../queues/payment.queue"
-import { walletsService } from "../wallets/wallets.service"
 import { syncLinkedPayrollTransaction } from "../payments/payroll-mobile-sync"
 import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import type { InstanviProvider } from "./instanvi-payments.types"
@@ -81,7 +80,6 @@ export const mobilePaymentsService = {
 
   async collect(companyId: string, input: CollectInput) {
     const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
-    const wallet = await walletsService.getByCompanyId(companyId)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -111,7 +109,6 @@ export const mobilePaymentsService = {
     const row = {
       id: createId(),
       companyId,
-      walletId: wallet.id,
       externalReferenceId: payment.transaction_id,
       type: "collection" as const,
       amount: input.amount,
@@ -173,13 +170,6 @@ export const mobilePaymentsService = {
       },
     })
 
-    if (!options?.skipBalanceCheck) {
-      const wallet = await walletsService.getByCompanyId(companyId)
-      if (wallet.balance < input.amount) {
-        throw AppError.validation("Insufficient wallet balance for disbursement")
-      }
-    }
-
     const jobId = disburseJobId(companyId, idempotencyKey)
 
     try {
@@ -189,7 +179,6 @@ export const mobilePaymentsService = {
           companyId,
           idempotencyKey,
           payRunId: options?.payRunId,
-          skipWalletDebit: options?.skipBalanceCheck,
           input: { ...input, phone: msisdn, provider },
         },
         { jobId }
@@ -255,7 +244,6 @@ export const mobilePaymentsService = {
           companyId,
           idempotencyKey: item.idempotencyKey,
           payRunId: options?.payRunId,
-          skipWalletDebit: true,
           input: { ...item.input, phone: msisdn, provider },
         },
         opts: { jobId },
@@ -295,11 +283,6 @@ export const mobilePaymentsService = {
 
     const msisdn = carrierCheck.parsed.national
     const provider = resolveProvider(msisdn, input.provider)
-    const wallet = await walletsService.getByCompanyId(companyId)
-
-    if (!meta?.skipWalletDebit && wallet.balance < input.amount) {
-      throw AppError.validation("Insufficient wallet balance for disbursement")
-    }
 
     const externalId = input.externalId ?? createId()
     const now = nowIso()
@@ -324,18 +307,9 @@ export const mobilePaymentsService = {
       callback_url: env.INSTANVI_CALLBACK_URL,
     })
 
-    if (!meta?.skipWalletDebit) {
-      await walletsService.debit(
-        wallet.id,
-        input.amount,
-        `Disbursement ${payment.transaction_id}`
-      )
-    }
-
     const row = {
       id: createId(),
       companyId,
-      walletId: wallet.id,
       externalReferenceId: payment.transaction_id,
       type: "disbursement" as const,
       amount: input.amount,
@@ -386,7 +360,6 @@ export const mobilePaymentsService = {
     const remote = await instanvi.getTransaction(transactionId)
     const status = mapProviderStatus(remote.status)
     const now = nowIso()
-    const wasPending = txn.status === "pending"
 
     await db
       .update(mobilePaymentTransactions)
@@ -398,32 +371,6 @@ export const mobilePaymentsService = {
         updatedAt: now,
       })
       .where(eq(mobilePaymentTransactions.id, txn.id))
-
-    if (
-      wasPending &&
-      status === "successful" &&
-      txn.type === "collection" &&
-      txn.walletId
-    ) {
-      await walletsService.credit(
-        txn.walletId,
-        txn.amount,
-        `Collection ${transactionId}`
-      )
-    }
-
-    if (
-      wasPending &&
-      status === "failed" &&
-      txn.type === "disbursement" &&
-      txn.walletId
-    ) {
-      await walletsService.credit(
-        txn.walletId,
-        txn.amount,
-        `Disbursement reversal ${transactionId}`
-      )
-    }
 
     if (txn.payrollTransactionId) {
       await syncLinkedPayrollTransaction(

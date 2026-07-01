@@ -10,7 +10,6 @@ export type DisburseJobData = {
   companyId: string
   idempotencyKey: string
   payRunId?: string
-  skipWalletDebit?: boolean
   input: {
     amount: number
     currency: string

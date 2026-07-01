@@ -35,7 +35,6 @@ export function startPaymentWorker() {
           idempotencyKey: job.data.idempotencyKey,
           jobId: job.id ?? undefined,
           payRunId: job.data.payRunId,
-          skipWalletDebit: job.data.skipWalletDebit,
         }
       )
 

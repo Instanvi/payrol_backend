@@ -26,7 +26,6 @@ export interface BulkDisburseItem {
 }
 
 export interface QueueDisburseOptions {
-  skipBalanceCheck?: boolean
   payRunId?: string
 }
 
@@ -34,5 +33,4 @@ export interface ExecuteDisburseMeta {
   idempotencyKey?: string
   jobId?: string
   payRunId?: string
-  skipWalletDebit?: boolean
 }

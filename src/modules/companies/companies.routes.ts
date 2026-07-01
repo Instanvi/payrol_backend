@@ -21,7 +21,6 @@ router.post(
   controller.uploadKycDocument
 )
 router.post("/me/kyc/submit", controller.submitKyc)
-router.get("/me/wallet", controller.getCompanyWallet)
 
 router.get(
   "/me/integrations/instanvi",

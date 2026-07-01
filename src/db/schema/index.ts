@@ -106,26 +106,6 @@ export const companyReviewEvents = pgTable("company_review_events", {
   createdAt: createdAt(),
 })
 
-export const wallets = pgTable(
-  "wallets",
-  {
-    // One wallet per company — payroll funds are company-owned, not per-user.
-    id: uuid("id").primaryKey().defaultRandom(),
-    companyId: uuid("company_id")
-      .notNull()
-      .references(() => companies.id, { onDelete: "cascade" }),
-    balance: real("balance").notNull().default(0),
-    currency: text("currency").notNull().default("XAF"),
-    momoAccountId: text("momo_account_id"),
-    status: text("status", { enum: ["active", "suspended"] })
-      .notNull()
-      .default("active"),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [uniqueIndex("wallets_company_id_unique").on(table.companyId)]
-)
-
 export const employees = pgTable("employees", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id")
@@ -273,9 +253,6 @@ export const mobilePaymentTransactions = pgTable("mobile_payment_transactions", 
   companyId: uuid("company_id")
     .notNull()
     .references(() => companies.id, { onDelete: "cascade" }),
-  walletId: uuid("wallet_id").references(() => wallets.id, {
-    onDelete: "set null",
-  }),
   externalReferenceId: text("external_reference_id").notNull().unique(),
   type: text("type", { enum: ["collection", "disbursement"] }).notNull(),
   amount: real("amount").notNull(),
