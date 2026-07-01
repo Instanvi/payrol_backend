@@ -55,6 +55,46 @@ function mapCompany(row: typeof companies.$inferSelect) {
   }
 }
 
+const REQUIRED_KYC_DOCUMENTS = [
+  "business_registration",
+  "tax_certificate",
+  "director_id",
+] as const
+
+function getKycDocumentStatus(
+  docs: ReturnType<typeof mapKycDocument>[]
+) {
+  const uploadedTypes = new Set(docs.map((d) => d.documentType))
+  const missingDocuments = REQUIRED_KYC_DOCUMENTS.filter(
+    (type) => !uploadedTypes.has(type)
+  )
+  return {
+    missingDocuments,
+    uploadedDocumentTypes: [...uploadedTypes],
+  }
+}
+
+async function getCompanyOwners(companyId: string) {
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      status: users.status,
+    })
+    .from(users)
+    .where(and(eq(users.companyId, companyId), eq(users.role, "owner")))
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone ?? undefined,
+    status: row.status as "active" | "invited" | "inactive",
+  }))
+}
+
 export const companiesService = {
   async getById(companyId: string) {
     const row = await findOne(
@@ -238,14 +278,7 @@ export const companiesService = {
   async getOnboardingStatus(companyId: string) {
     const company = await this.getById(companyId)
     const docs = await this.listKycDocuments(companyId)
-
-    const required = [
-      "business_registration",
-      "tax_certificate",
-      "director_id",
-    ] as const
-    const uploadedTypes = new Set(docs.map((d) => d.documentType))
-    const missingDocuments = required.filter((type) => !uploadedTypes.has(type))
+    const { missingDocuments } = getKycDocumentStatus(docs)
 
     return {
       company,
@@ -267,7 +300,12 @@ export const companiesService = {
           .where(eq(companies.status, status))
       : await db.select().from(companies)
 
-    return rows.map(mapCompany)
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...mapCompany(row),
+        owners: await getCompanyOwners(row.id),
+      }))
+    )
   },
 
   async notifyCompanyOwners(
@@ -303,15 +341,54 @@ export const companiesService = {
   async getAdminDetail(companyId: string) {
     const company = await this.getById(companyId)
     const docs = await this.listKycDocuments(companyId)
+    const { missingDocuments, uploadedDocumentTypes } =
+      getKycDocumentStatus(docs)
     const events = await db
       .select()
       .from(companyReviewEvents)
       .where(eq(companyReviewEvents.companyId, companyId))
+    const owners = await getCompanyOwners(companyId)
 
-    return { company, documents: docs, reviewEvents: events }
+    return {
+      company,
+      documents: docs,
+      reviewEvents: events,
+      owners,
+      missingDocuments,
+      uploadedDocumentTypes,
+    }
   },
 
-  async approve(companyId: string, adminUserId: string, chargeId?: string) {
+  async approve(
+    companyId: string,
+    adminUserId: string,
+    chargeId?: string,
+    forceApprove?: boolean
+  ) {
+    const company = await this.getById(companyId)
+    const docs = await this.listKycDocuments(companyId)
+    const { missingDocuments } = getKycDocumentStatus(docs)
+
+    if (
+      !forceApprove &&
+      missingDocuments.length > 0 &&
+      company.status !== "pending_review"
+    ) {
+      throw AppError.validation(
+        "Company has incomplete KYC. Use force approve to override."
+      )
+    }
+
+    if (
+      !forceApprove &&
+      missingDocuments.length > 0 &&
+      company.status === "pending_review"
+    ) {
+      throw AppError.validation(
+        `Missing required KYC documents: ${missingDocuments.join(", ")}`
+      )
+    }
+
     const now = nowIso()
     await db
       .update(companies)
@@ -332,14 +409,18 @@ export const companiesService = {
       actorUserId: adminUserId,
       action: "approved",
       reason: null,
-      metadata: chargeId ? JSON.stringify({ chargeId }) : null,
+      metadata: JSON.stringify({
+        chargeId: chargeId ?? null,
+        forceApprove: Boolean(forceApprove),
+        missingDocuments: forceApprove ? missingDocuments : [],
+      }),
       createdAt: now,
     })
 
-    const company = await this.getById(companyId)
+    const approvedCompany = await this.getById(companyId)
     await this.notifyCompanyOwners(companyId, {
       title: "Your company is approved",
-      message: `${company.name} has been approved. You can now run mobile money payroll. Platform transaction fees apply per disbursement.`,
+      message: `${approvedCompany.name} has been approved. You can now run mobile money payroll. Platform transaction fees apply per disbursement.`,
       type: "company_approved",
       actionLabel: "Open dashboard",
       actionUrl: `${env.APP_PUBLIC_URL}/dashboard`,

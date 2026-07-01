@@ -29,6 +29,7 @@ export const rejectCompanySchema = z.object({
 
 export const approveCompanySchema = z.object({
   chargeId: z.string().uuid().optional(),
+  forceApprove: z.boolean().optional(),
 })
 
 export const createChargeSchema = z.object({

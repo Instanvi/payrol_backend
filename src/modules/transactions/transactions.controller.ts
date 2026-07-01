@@ -9,7 +9,9 @@ import { transactionsService } from "./transactions.service"
 export const listTransactions = asyncHandler(async (req: Request, res: Response) => {
   const auth = requireTenantAuth(req)
   const query = listQuerySchema.parse(req.query)
-  const items = await transactionsService.list(auth.companyId)
+  const projectId =
+    typeof req.query.projectId === "string" ? req.query.projectId : undefined
+  const items = await transactionsService.list(auth.companyId, projectId)
   const result = paginateList(items, query, {
     searchKeys: [
       "employeeName",

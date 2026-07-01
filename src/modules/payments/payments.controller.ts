@@ -14,7 +14,9 @@ import { paymentsService } from "./payments.service"
 export const listPayments = asyncHandler(async (req: Request, res: Response) => {
   const auth = requireTenantAuth(req)
   const query = listQuerySchema.parse(req.query)
-  const items = await paymentsService.list(auth.companyId)
+  const projectId =
+    typeof req.query.projectId === "string" ? req.query.projectId : undefined
+  const items = await paymentsService.list(auth.companyId, projectId)
   const result = paginateList(items, query, {
     searchKeys: ["reference", "payPeriod"],
     filter: (item, params) => !params.status || item.status === params.status,

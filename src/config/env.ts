@@ -43,7 +43,7 @@ const envSchema = z.object({
   PAYMENT_QUEUE_CONCURRENCY: z.coerce.number().default(5),
   RUN_PAYMENT_WORKER: z
     .enum(["true", "false"])
-    .default(process.env.VERCEL ? "false" : "true")
+    .default("true")
     .transform((value) => value === "true"),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),

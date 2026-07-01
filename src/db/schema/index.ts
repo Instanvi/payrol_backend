@@ -150,11 +150,48 @@ export const employees = pgTable("employees", {
   updatedAt: updatedAt(),
 })
 
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    code: text("code"),
+    description: text("description"),
+    status: text("status", { enum: ["active", "inactive"] })
+      .notNull()
+      .default("active"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("projects_company_code_unique").on(table.companyId, table.code),
+  ]
+)
+
+export const projectEmployees = pgTable(
+  "project_employees",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.employeeId] })]
+)
+
 export const payRuns = pgTable("pay_runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id")
     .notNull()
     .references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
   reference: text("reference").notNull(),
   payPeriod: text("pay_period").notNull(),
   description: text("description"),
@@ -194,6 +231,9 @@ export const payrollTransactions = pgTable("payroll_transactions", {
   companyId: uuid("company_id")
     .notNull()
     .references(() => companies.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
   payRunId: uuid("pay_run_id")
     .notNull()
     .references(() => payRuns.id, { onDelete: "cascade" }),

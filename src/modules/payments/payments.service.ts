@@ -17,6 +17,7 @@ import {
   payrollTransactions,
 } from "../../db/schema/index"
 import { employeesService } from "../employees/employees.service"
+import { projectsService } from "../projects/projects.service"
 import { chargesService } from "../charges/charges.service"
 import type { CreatePaymentInput } from "./payments.validation"
 
@@ -28,6 +29,7 @@ function mapPayRun(
 ) {
   return {
     id: row.id,
+    projectId: row.projectId ?? undefined,
     reference: row.reference,
     payPeriod: row.payPeriod,
     description: row.description ?? undefined,
@@ -64,6 +66,7 @@ async function createTransactionsForPayRun(
     amount: number
     status: PayRunStatus
     createdAt: string
+    projectId?: string
   },
   selectedEmployees: Awaited<
     ReturnType<typeof employeesService.getActiveByIds>
@@ -82,6 +85,7 @@ async function createTransactionsForPayRun(
     await db.insert(payrollTransactions).values({
       id: createId(),
       companyId,
+      projectId: input.projectId ?? null,
       payRunId,
       payRunReference: input.reference,
       payPeriod: input.payPeriod,
@@ -105,11 +109,18 @@ async function createTransactionsForPayRun(
 }
 
 export const paymentsService = {
-  async list(companyId = env.DEFAULT_COMPANY_ID) {
-    const rows = await db
-      .select()
-      .from(payRuns)
-      .where(eq(payRuns.companyId, companyId))
+  async list(companyId = env.DEFAULT_COMPANY_ID, projectId?: string) {
+    const rows = projectId
+      ? await db
+          .select()
+          .from(payRuns)
+          .where(
+            and(eq(payRuns.companyId, companyId), eq(payRuns.projectId, projectId))
+          )
+      : await db
+          .select()
+          .from(payRuns)
+          .where(eq(payRuns.companyId, companyId))
 
     return Promise.all(
       rows.map(async (row) => mapPayRun(row, await getEmployeeIds(row.id)))
@@ -142,6 +153,13 @@ export const paymentsService = {
       throw AppError.validation("One or more selected employees are invalid")
     }
 
+    await projectsService.getActiveById(input.projectId, companyId)
+    await projectsService.validateEmployeesOnProject(
+      input.projectId,
+      input.employeeIds,
+      companyId
+    )
+
     const feeBreakdown = await chargesService.calculateForCompany(
       companyId,
       input.amount
@@ -154,6 +172,7 @@ export const paymentsService = {
     await db.insert(payRuns).values({
       id: payRunId,
       companyId,
+      projectId: input.projectId,
       reference: input.reference,
       payPeriod: input.payPeriod,
       description: input.description ?? null,
@@ -183,6 +202,7 @@ export const paymentsService = {
         amount: input.amount,
         status,
         createdAt,
+        projectId: input.projectId,
       },
       selectedEmployees
     )

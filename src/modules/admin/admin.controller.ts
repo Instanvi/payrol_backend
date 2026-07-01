@@ -34,7 +34,8 @@ export const approveCompany = asyncHandler(
     const detail = await companiesService.approve(
       getRouteParam(req, "id"),
       auth.userId,
-      req.body.chargeId
+      req.body.chargeId,
+      req.body.forceApprove
     )
     sendSuccess(res, detail)
   }

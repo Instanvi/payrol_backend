@@ -7,6 +7,7 @@ import { payrollTransactions } from "../../db/schema/index"
 function mapTransaction(row: typeof payrollTransactions.$inferSelect) {
   return {
     id: row.id,
+    projectId: row.projectId ?? undefined,
     payRunId: row.payRunId,
     payRunReference: row.payRunReference,
     payPeriod: row.payPeriod,
@@ -28,11 +29,21 @@ function mapTransaction(row: typeof payrollTransactions.$inferSelect) {
 }
 
 export const transactionsService = {
-  async list(companyId = env.DEFAULT_COMPANY_ID) {
-    const rows = await db
-      .select()
-      .from(payrollTransactions)
-      .where(eq(payrollTransactions.companyId, companyId))
+  async list(companyId = env.DEFAULT_COMPANY_ID, projectId?: string) {
+    const rows = projectId
+      ? await db
+          .select()
+          .from(payrollTransactions)
+          .where(
+            and(
+              eq(payrollTransactions.companyId, companyId),
+              eq(payrollTransactions.projectId, projectId)
+            )
+          )
+      : await db
+          .select()
+          .from(payrollTransactions)
+          .where(eq(payrollTransactions.companyId, companyId))
 
     return rows.map(mapTransaction)
   },
