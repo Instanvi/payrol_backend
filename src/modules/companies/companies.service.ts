@@ -13,6 +13,7 @@ import {
   users,
 } from "../../db/schema"
 import type { CompanyStatus } from "../../common/services/company-approval.service"
+import { isInstanviPaymentsAvailable } from "../integrations/instanvi-integration.utils"
 import { notificationService } from "../notifications/notifications.service"
 
 export type CompanyOnboardingStep = "profile" | "kyc" | "submitted" | "complete"
@@ -38,6 +39,7 @@ function mapCompany(row: typeof companies.$inferSelect) {
   const instanviConnected = Boolean(
     row.instanviApiKeyEncrypted?.trim() && row.instanviConnectedAt
   )
+  const instanviPaymentsAvailable = isInstanviPaymentsAvailable(row)
 
   return {
     id: row.id,
@@ -55,6 +57,7 @@ function mapCompany(row: typeof companies.$inferSelect) {
     approvedAt: row.approvedAt ?? undefined,
     chargeId: row.chargeId ?? undefined,
     instanviConnected,
+    instanviPaymentsAvailable,
     instanviLocationId: row.instanviLocationId ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

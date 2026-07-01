@@ -11,6 +11,7 @@ import type { CreateUserInput, UpdateUserInput } from "./users.validation"
 import { toPublicUser } from "./users.validation"
 import { memberInvitesService } from "../members/member-invites.service"
 import { notificationService } from "../notifications/notifications.service"
+import { isInstanviPaymentsAvailable } from "../integrations/instanvi-integration.utils"
 
 type UserRole = "owner" | "admin" | "manager" | "viewer"
 
@@ -35,6 +36,7 @@ async function getCompany(companyId: string) {
     instanviConnected: Boolean(
       company.instanviApiKeyEncrypted?.trim() && company.instanviConnectedAt
     ),
+    instanviPaymentsAvailable: isInstanviPaymentsAvailable(company),
     instanviLocationId: company.instanviLocationId ?? undefined,
   }
 }

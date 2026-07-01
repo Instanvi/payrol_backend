@@ -16,6 +16,12 @@ import {
   type InstanviPaymentsClient,
 } from "../mobile-payments/instanvi-payments.client"
 import type { SaveInstanviKeysInput } from "./integrations.validation"
+import {
+  hasEnvInstanviFallback,
+  isCompanyInstanviConfigured,
+  isInstanviPaymentsAvailable,
+  isValidInstanviApiKey,
+} from "./instanvi-integration.utils"
 
 function maskLast4(apiKey: string) {
   const trimmed = apiKey.trim()
@@ -23,13 +29,18 @@ function maskLast4(apiKey: string) {
   return `••••${trimmed.slice(-4)}`
 }
 
-function isCompanyInstanviConnected(
-  row: Pick<
-    typeof companies.$inferSelect,
-    "instanviApiKeyEncrypted" | "instanviConnectedAt"
-  >
+function resolveLocationId(
+  companyLocationId?: string | null,
+  preferEnv = false
 ) {
-  return Boolean(row.instanviApiKeyEncrypted?.trim() && row.instanviConnectedAt)
+  const companyLocation = companyLocationId?.trim()
+  const envLocation = env.INSTANVI_LOCATION_ID?.trim()
+
+  if (preferEnv) {
+    return envLocation || companyLocation || undefined
+  }
+
+  return companyLocation || envLocation || undefined
 }
 
 export const companyIntegrationsService = {
@@ -40,10 +51,14 @@ export const companyIntegrationsService = {
 
     if (!row) throw AppError.notFound("Company not found")
 
-    const connected = isCompanyInstanviConnected(row)
+    const connected = isCompanyInstanviConfigured(row)
+    const paymentsAvailable = isInstanviPaymentsAvailable(row)
+    const usingEnvFallback = !connected && hasEnvInstanviFallback()
 
     return {
       connected,
+      paymentsAvailable,
+      usingEnvFallback,
       apiKeyLast4: row.instanviApiKeyLast4 ?? undefined,
       locationId: row.instanviLocationId ?? undefined,
       connectedAt: row.instanviConnectedAt ?? undefined,
@@ -52,6 +67,12 @@ export const companyIntegrationsService = {
 
   async saveInstanviKeys(companyId: string, input: SaveInstanviKeysInput) {
     const apiKey = input.apiKey.trim()
+    if (!isValidInstanviApiKey(apiKey)) {
+      throw AppError.validation(
+        "API key must start with app_ (e.g. app_c05a083dc1850605a3b587e0ea0ac47ef0eda26bc7182198)"
+      )
+    }
+
     const locationId = input.locationId?.trim() || null
     const now = nowIso()
 
@@ -120,14 +141,17 @@ export const companyIntegrationsService = {
     if (row.instanviApiKeyEncrypted?.trim()) {
       return {
         apiKey: decryptSecret(row.instanviApiKeyEncrypted),
-        locationId: row.instanviLocationId?.trim() || undefined,
+        locationId: resolveLocationId(row.instanviLocationId),
+        source: "company" as const,
       }
     }
 
-    if (env.INSTANVI_API_KEY?.trim()) {
+    const envApiKey = env.INSTANVI_API_KEY?.trim()
+    if (envApiKey && isValidInstanviApiKey(envApiKey)) {
       return {
-        apiKey: env.INSTANVI_API_KEY.trim(),
-        locationId: env.INSTANVI_LOCATION_ID?.trim() || undefined,
+        apiKey: envApiKey,
+        locationId: resolveLocationId(row.instanviLocationId, true),
+        source: "env" as const,
       }
     }
 
@@ -145,10 +169,13 @@ export const companyIntegrationsService = {
     const client = await this.getInstanviClient(companyId)
     await client.listTransactions({ limit: 1 })
 
+    const credentials = await this.getInstanviCredentials(companyId)
+
     await paymentLogService.info({
       companyId,
       event: "integrations.instanvi.tested",
       message: "Instanvi connection test succeeded",
+      metadata: { source: credentials.source },
     })
 
     return { ok: true as const }

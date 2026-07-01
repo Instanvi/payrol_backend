@@ -66,6 +66,11 @@ export function createInstanviClient(credentials: InstanviClientCredentials) {
         "Link Instanvi in Settings before running payments."
       )
     }
+    if (!/^app_[a-zA-Z0-9_]+$/.test(apiKey) || apiKey.length < 12) {
+      throw AppError.validation(
+        "Instanvi API key is invalid. Expected format: app_<token>"
+      )
+    }
   }
 
   function baseHeaders(): Record<string, string> {
