@@ -58,17 +58,23 @@ export type InstanviPaymentsClient = ReturnType<typeof createInstanviClient>
 
 export function createInstanviClient(credentials: InstanviClientCredentials) {
   const apiKey = credentials.apiKey.trim()
-  if (!apiKey) {
-    throw AppError.validation("Instanvi API key is required")
+  const locationId = credentials.locationId?.trim()
+
+  function assertApiKeyConfigured() {
+    if (!apiKey) {
+      throw AppError.validation(
+        "Link Instanvi in Settings before running payments."
+      )
+    }
   }
 
   function baseHeaders(): Record<string, string> {
+    assertApiKeyConfigured()
     assertInstanviBaseUrlConfigured()
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     }
-    const locationId = credentials.locationId?.trim()
     if (locationId) {
       headers["x-location-id"] = locationId
     }
@@ -172,9 +178,3 @@ export function createInstanviClient(credentials: InstanviClientCredentials) {
 export function assertInstanviConfigured() {
   assertInstanviBaseUrlConfigured()
 }
-
-/** @deprecated Use createInstanviClient via companyIntegrationsService */
-export const instanviPaymentsClient = createInstanviClient({
-  apiKey: env.INSTANVI_API_KEY ?? "",
-  locationId: env.INSTANVI_LOCATION_ID,
-})
