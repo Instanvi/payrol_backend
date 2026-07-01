@@ -3,9 +3,49 @@ import { and, eq } from "drizzle-orm"
 import { nowIso } from "../../common/utils/id"
 import { db } from "../../db"
 import { findOne } from "../../db/query"
-import { mobilePaymentTransactions, payrollTransactions } from "../../db/schema"
+import {
+  mobilePaymentTransactions,
+  payRuns,
+  payrollTransactions,
+} from "../../db/schema"
 import type { InternalPaymentStatus } from "../mobile-payments/provider.utils"
 import { mobilePaymentsService } from "../mobile-payments/mobile-payments.service"
+
+async function reconcilePayRunStatus(payRunId: string, companyId: string) {
+  const transactions = await db
+    .select()
+    .from(payrollTransactions)
+    .where(
+      and(
+        eq(payrollTransactions.payRunId, payRunId),
+        eq(payrollTransactions.companyId, companyId)
+      )
+    )
+
+  if (transactions.length === 0) {
+    return
+  }
+
+  const allTerminal = transactions.every(
+    (txn) => txn.status === "completed" || txn.status === "failed"
+  )
+  if (!allTerminal) {
+    return
+  }
+
+  const allFailed = transactions.every((txn) => txn.status === "failed")
+  const nextStatus = allFailed ? "failed" : "completed"
+  const now = nowIso()
+
+  await db
+    .update(payRuns)
+    .set({
+      status: nextStatus,
+      processedAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(payRuns.id, payRunId), eq(payRuns.companyId, companyId)))
+}
 
 export async function syncLinkedPayrollTransaction(
   payrollTransactionId: string,
@@ -20,6 +60,17 @@ export async function syncLinkedPayrollTransaction(
         ? ("failed" as const)
         : ("processing" as const)
 
+  const txn = await findOne(
+    db
+      .select()
+      .from(payrollTransactions)
+      .where(eq(payrollTransactions.id, payrollTransactionId))
+  )
+
+  if (!txn) {
+    return
+  }
+
   await db
     .update(payrollTransactions)
     .set({
@@ -32,6 +83,8 @@ export async function syncLinkedPayrollTransaction(
       updatedAt: now,
     })
     .where(eq(payrollTransactions.id, payrollTransactionId))
+
+  await reconcilePayRunStatus(txn.payRunId, txn.companyId)
 }
 
 export async function syncPayRunProcessingTransactions(
@@ -69,4 +122,6 @@ export async function syncPayRunProcessingTransactions(
       // Provider may be temporarily unavailable; leave as processing.
     }
   }
+
+  await reconcilePayRunStatus(payRunId, companyId)
 }

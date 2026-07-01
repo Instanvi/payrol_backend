@@ -38,6 +38,10 @@ function isMobileCarrier(
   return carrier === "mtn" || carrier === "orange"
 }
 
+function isDisbursableTransactionStatus(status: string) {
+  return status === "pending" || status === "failed"
+}
+
 function filterLinesBySelection(
   lines: MobilePayRunLine[],
   options?: Pick<BulkDisburseInput, "employeeIds" | "transactionIds">
@@ -106,7 +110,7 @@ export const paymentsBulkService = {
       const parsed = detectCarrier(phone)
       const hasMobileCarrier = parsed.valid && isMobileCarrier(parsed.carrier)
       const mobileEligible =
-        txn.status === "pending" && hasMobileCarrier
+        isDisbursableTransactionStatus(txn.status) && hasMobileCarrier
 
       return {
         ...base,
@@ -116,17 +120,28 @@ export const paymentsBulkService = {
         mobileEligible,
         accountChecked: true,
         mobileAccountValid: hasMobileCarrier,
-        error: !parsed.valid
-          ? parsed.error
-          : !hasMobileCarrier
-            ? `Carrier ${parsed.carrier} is not supported for mobile money`
-            : undefined,
+        error:
+          txn.status === "failed"
+            ? (txn.failureReason ??
+              "Previous disbursement failed — you can retry")
+            : !parsed.valid
+              ? parsed.error
+              : !hasMobileCarrier
+                ? `Carrier ${parsed.carrier} is not supported for mobile money`
+                : txn.status === "processing"
+                  ? "Disbursement in progress"
+                  : txn.status === "completed"
+                    ? "Already paid"
+                    : undefined,
       }
     })
 
     const summary = {
       total: lines.length,
       pending: transactions.filter((t) => t.status === "pending").length,
+      processing: transactions.filter((t) => t.status === "processing").length,
+      failed: transactions.filter((t) => t.status === "failed").length,
+      completed: transactions.filter((t) => t.status === "completed").length,
       mtn: lines.filter((l) => l.carrier === "mtn").length,
       orange: lines.filter((l) => l.carrier === "orange").length,
       other: lines.filter(
@@ -318,7 +333,12 @@ export const paymentsBulkService = {
 
       await db
         .update(payrollTransactions)
-        .set({ status: "processing", updatedAt: now })
+        .set({
+          status: "processing",
+          failureReason: null,
+          paidAt: null,
+          updatedAt: now,
+        })
         .where(eq(payrollTransactions.id, line.transactionId))
 
       queued.push({
