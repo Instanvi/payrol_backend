@@ -203,7 +203,7 @@ export const payRuns = pgTable("pay_runs", {
   payPeriod: text("pay_period").notNull(),
   description: text("description"),
   amount: real("amount").notNull(),
-  currency: text("currency").notNull().default("USD"),
+  currency: text("currency").notNull().default("XAF"),
   status: text("status", {
     enum: ["draft", "pending", "completed", "failed"],
   })
