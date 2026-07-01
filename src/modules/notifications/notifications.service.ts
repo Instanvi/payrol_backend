@@ -14,6 +14,7 @@ export type NotificationType =
   | "kyc_submitted"
   | "payroll_info"
   | "member_invite"
+  | "password_reset"
   | "general"
 
 type CreateNotificationInput = {
@@ -148,6 +149,30 @@ export const notificationService = {
       actionLabel: "Accept invitation",
       actionUrl: input.inviteUrl,
       metadata: { role: input.role, companyName: input.companyName },
+    })
+  },
+
+  async sendPasswordResetEmail(input: {
+    userId: string
+    companyId?: string
+    recipientEmail: string
+    recipientName: string
+    resetUrl: string
+  }) {
+    const message =
+      "We received a request to reset your Instanvi Payroll password. Use the button below to choose a new password. This link expires in 1 hour. If you did not request a reset, you can ignore this email."
+
+    return this.sendInfoEmail({
+      userId: input.userId,
+      companyId: input.companyId,
+      recipientEmail: input.recipientEmail,
+      recipientName: input.recipientName,
+      title: "Reset your password",
+      message,
+      type: "password_reset",
+      actionLabel: "Reset password",
+      actionUrl: input.resetUrl,
+      metadata: { purpose: "password_reset" },
     })
   },
 

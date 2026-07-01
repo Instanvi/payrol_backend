@@ -396,6 +396,17 @@ export const memberInvites = pgTable("member_invites", {
   createdAt: createdAt(),
 })
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+  createdAt: createdAt(),
+})
+
 export const authChallenges = pgTable("auth_challenges", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -428,6 +439,7 @@ export const notifications = pgTable("notifications", {
       "kyc_submitted",
       "payroll_info",
       "member_invite",
+      "password_reset",
       "general",
     ],
   }).notNull(),

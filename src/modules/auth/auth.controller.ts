@@ -38,6 +38,25 @@ export const acceptInvite = asyncHandler(async (req: Request, res: Response) => 
   sendSuccess(res, result)
 })
 
+export const forgotPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const result = await authService.forgotPassword(req.body)
+    sendSuccess(res, result)
+  }
+)
+
+export const getResetPreview = asyncHandler(
+  async (req: Request, res: Response) => {
+    const result = await authService.getResetPreview(getRouteParam(req, "token"))
+    sendSuccess(res, result)
+  }
+)
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authService.resetPassword(req.body)
+  sendSuccess(res, result)
+})
+
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
   const auth = getAuth(req)
   const session = await authService.getMe(auth.userId)

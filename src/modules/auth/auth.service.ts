@@ -17,12 +17,15 @@ import { findOne } from "../../db/query"
 import { authChallenges, companies, users } from "../../db/schema/index"
 import { notificationService } from "../notifications/notifications.service"
 import { memberInvitesService } from "../members/member-invites.service"
+import { passwordResetService } from "./password-reset.service"
 import { walletsService } from "../wallets/wallets.service"
 import { usersService } from "../users/users.service"
 import type {
   AcceptInviteInput,
+  ForgotPasswordInput,
   LoginInput,
   RegisterInput,
+  ResetPasswordInput,
   Verify2FAInput,
 } from "./auth.validation"
 
@@ -356,5 +359,86 @@ export const authService = {
     }
 
     return issueLoginChallenge(updatedUser)
+  },
+
+  async forgotPassword(input: ForgotPasswordInput) {
+    const user = await findOne(
+      db
+        .select()
+        .from(users)
+        .where(eq(users.email, input.email.toLowerCase()))
+    )
+
+    if (
+      user &&
+      user.status === "active" &&
+      user.passwordHash &&
+      !user.isSystemAdmin
+    ) {
+      const token = await passwordResetService.createToken(user.id)
+      const resetUrl = passwordResetService.buildResetUrl(token)
+
+      await notificationService.sendPasswordResetEmail({
+        userId: user.id,
+        companyId: user.companyId ?? undefined,
+        recipientEmail: user.email,
+        recipientName: user.name,
+        resetUrl,
+      })
+    }
+
+    return {
+      message:
+        "If an account exists for that email, we sent password reset instructions.",
+    }
+  },
+
+  async getResetPreview(token: string) {
+    const reset = await passwordResetService.getValidToken(token)
+    const user = await findOne(
+      db.select().from(users).where(eq(users.id, reset.userId))
+    )
+
+    if (!user || user.status !== "active" || !user.passwordHash) {
+      throw new AppError(
+        "This password reset link is invalid or has expired.",
+        404,
+        "RESET_TOKEN_EXPIRED"
+      )
+    }
+
+    return {
+      email: user.email,
+      name: user.name,
+      expiresAt: reset.expiresAt,
+    }
+  },
+
+  async resetPassword(input: ResetPasswordInput) {
+    const reset = await passwordResetService.getValidToken(input.token)
+    const user = await findOne(
+      db.select().from(users).where(eq(users.id, reset.userId))
+    )
+
+    if (!user || user.status !== "active" || !user.passwordHash) {
+      throw new AppError(
+        "This password reset link is invalid or has expired.",
+        404,
+        "RESET_TOKEN_EXPIRED"
+      )
+    }
+
+    const passwordHash = await hashPassword(input.password)
+    const now = nowIso()
+
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: now })
+      .where(eq(users.id, user.id))
+
+    await passwordResetService.markUsed(reset.id)
+    await db.delete(authChallenges).where(eq(authChallenges.userId, user.id))
+
+    return { message: "Password updated successfully. You can sign in now." }
   },
 }
