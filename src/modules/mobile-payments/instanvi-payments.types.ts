@@ -2,6 +2,8 @@ export type InstanviPaymentType = "COLLECTION" | "DEPOSIT"
 
 export type InstanviProvider = "MTN_CAM" | "ORANGE_CAM"
 
+export type InstanviVerificationScope = "provider_api" | "network_prefix_only"
+
 export interface InstanviEnvelope<T> {
   status_code: number
   status: string
@@ -67,7 +69,9 @@ export interface InstanviListTransactionsData {
 export interface InstanviVerifyActiveData {
   phoneNumber: string
   type: InstanviPaymentType
+  provider: InstanviProvider
   result: boolean
+  verificationScope: InstanviVerificationScope
 }
 
 export interface InstanviBasicUserInfo {
@@ -82,6 +86,8 @@ export interface InstanviBasicUserInfo {
 export interface InstanviVerifyBasicInfoData {
   phoneNumber: string
   type: InstanviPaymentType
+  provider: InstanviProvider
+  verificationScope: InstanviVerificationScope
   result: InstanviBasicUserInfo
 }
 

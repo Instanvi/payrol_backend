@@ -11,6 +11,7 @@ import { env } from "../../config/env"
 import { db } from "../../db"
 import { findOne } from "../../db/query"
 import { employees } from "../../db/schema"
+import { checkMobileAccount } from "../mobile-payments/account-verification.service"
 import { isMobileMoneyCarrier } from "../mobile-payments/provider.utils"
 
 export interface EmployeeAccountValidation {
@@ -23,6 +24,7 @@ export interface EmployeeAccountValidation {
   validatedAt: string | null
   error: string | null
   accountHolderName?: string | null
+  verificationScope?: "provider_api" | "network_prefix_only"
 }
 
 async function persistValidation(
@@ -32,6 +34,7 @@ async function persistValidation(
     carrier: MobileCarrier | null
     accountValid: boolean
     error: string | null
+    accountHolderName?: string | null
   }
 ) {
   const now = nowIso()
@@ -42,6 +45,7 @@ async function persistValidation(
       mobileAccountValid: result.accountValid,
       mobileAccountValidatedAt: now,
       mobileAccountValidationError: result.error,
+      mobileAccountHolderName: result.accountHolderName ?? null,
       updatedAt: now,
     })
     .where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)))
@@ -66,6 +70,7 @@ export const employeesAccountService = {
         carrier: null as MobileCarrier | null,
         accountValid: false,
         error: "No phone number on file",
+        accountHolderName: null,
       }
       await persistValidation(employeeId, companyId, result)
       return {
@@ -87,6 +92,7 @@ export const employeesAccountService = {
         carrier: parsed.carrier,
         accountValid: false,
         error: parsed.error ?? "Invalid phone number format",
+        accountHolderName: null,
       }
       await persistValidation(employeeId, companyId, result)
       return {
@@ -106,6 +112,7 @@ export const employeesAccountService = {
         carrier: parsed.carrier,
         accountValid: false,
         error: `Carrier ${parsed.carrier} is not supported for mobile money payroll`,
+        accountHolderName: null,
       }
       await persistValidation(employeeId, companyId, result)
       return {
@@ -120,33 +127,62 @@ export const employeesAccountService = {
       }
     }
 
+    const verification = await checkMobileAccount(companyId, row.phone, "DEPOSIT")
+
+    if (!verification.ok) {
+      const result = {
+        carrier: verification.carrier ?? parsed.carrier,
+        accountValid: false,
+        error: verification.error ?? "Mobile money account verification failed",
+        accountHolderName: null,
+      }
+      await persistValidation(employeeId, companyId, result)
+      return {
+        employeeId: row.id,
+        name: row.name,
+        phone: verification.phone ?? parsed.national,
+        carrier: result.carrier,
+        accountValid: false,
+        mobileEligible: false,
+        validatedAt: nowIso(),
+        error: result.error,
+        verificationScope: verification.verificationScope,
+      }
+    }
+
     const result = {
-      carrier: parsed.carrier,
+      carrier: verification.carrier,
       accountValid: true,
-      error: null,
+      error: verification.warning ?? null,
+      accountHolderName: verification.accountHolderName ?? null,
     }
     await persistValidation(employeeId, companyId, result)
 
     await paymentLogService.info({
       companyId,
       event: "employee.account.validated",
-      message: `Employee mobile account validated by carrier: ${row.name}`,
+      message: `Employee mobile account verified via Instanvi: ${row.name}`,
       metadata: {
         employeeId,
-        phone: parsed.national,
-        carrier: parsed.carrier,
+        phone: verification.phone,
+        carrier: verification.carrier,
+        provider: verification.provider,
+        verificationScope: verification.verificationScope,
+        accountHolderName: verification.accountHolderName,
       },
     })
 
     return {
       employeeId: row.id,
       name: row.name,
-      phone: parsed.national,
-      carrier: parsed.carrier,
+      phone: verification.phone,
+      carrier: verification.carrier,
       accountValid: true,
-      mobileEligible: true,
+      mobileEligible: verification.mobileEligible,
       validatedAt: nowIso(),
-      error: null,
+      error: verification.warning ?? null,
+      accountHolderName: verification.accountHolderName,
+      verificationScope: verification.verificationScope,
     }
   },
 
@@ -199,6 +235,7 @@ export const employeesAccountService = {
         mobileAccountValid: null,
         mobileAccountValidatedAt: null,
         mobileAccountValidationError: null,
+        mobileAccountHolderName: null,
         updatedAt: nowIso(),
       })
       .where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)))

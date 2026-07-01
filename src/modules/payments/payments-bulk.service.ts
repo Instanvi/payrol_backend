@@ -29,6 +29,7 @@ export interface MobilePayRunLine {
   mobileEligible: boolean
   accountChecked: boolean
   mobileAccountValid: boolean | null
+  mobileAccountHolderName?: string | null
   platformFee?: number
   totalCharge?: number
   error?: string
@@ -85,6 +86,7 @@ export const paymentsBulkService = {
     const phoneByEmployee = new Map(
       employeeRows.map((row) => [row.id, row.phone ?? null])
     )
+    const employeeById = new Map(employeeRows.map((row) => [row.id, row]))
 
     const charge = await chargesService.resolveForCompany(companyId)
 
@@ -114,8 +116,13 @@ export const paymentsBulkService = {
 
       const parsed = detectCarrier(phone)
       const hasMobileCarrier = parsed.valid && isMobileCarrier(parsed.carrier)
+      const employee = employeeById.get(txn.employeeId)
+      const accountChecked = Boolean(employee?.mobileAccountValidatedAt)
+      const mobileAccountValid = employee?.mobileAccountValid ?? null
       const mobileEligible =
-        isDisbursableTransactionStatus(txn.status) && hasMobileCarrier
+        isDisbursableTransactionStatus(txn.status) &&
+        hasMobileCarrier &&
+        mobileAccountValid === true
       const platformFee = mobileEligible
         ? calculateCharge(txn.amount, charge).totalFee
         : 0
@@ -126,8 +133,9 @@ export const paymentsBulkService = {
         carrier: parsed.carrier,
         valid: parsed.valid,
         mobileEligible,
-        accountChecked: true,
-        mobileAccountValid: hasMobileCarrier,
+        accountChecked,
+        mobileAccountValid,
+        mobileAccountHolderName: employee?.mobileAccountHolderName ?? null,
         platformFee,
         totalCharge: mobileEligible ? txn.amount + platformFee : undefined,
         error:
@@ -138,11 +146,16 @@ export const paymentsBulkService = {
               ? parsed.error
               : !hasMobileCarrier
                 ? `Carrier ${parsed.carrier} is not supported for mobile money`
-                : txn.status === "processing"
-                  ? "Disbursement in progress"
-                  : txn.status === "completed"
-                    ? "Already paid"
-                    : undefined,
+                : !accountChecked
+                  ? "Validate mobile account before disbursement"
+                  : mobileAccountValid === false
+                    ? (employee?.mobileAccountValidationError ??
+                      "Mobile money account is not active")
+                    : txn.status === "processing"
+                      ? "Disbursement in progress"
+                      : txn.status === "completed"
+                        ? "Already paid"
+                        : undefined,
       }
     })
 

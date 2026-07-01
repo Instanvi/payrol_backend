@@ -133,6 +133,7 @@ export const employees = pgTable("employees", {
   mobileAccountValid: boolean("mobile_account_valid"),
   mobileAccountValidatedAt: text("mobile_account_validated_at"),
   mobileAccountValidationError: text("mobile_account_validation_error"),
+  mobileAccountHolderName: text("mobile_account_holder_name"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 })

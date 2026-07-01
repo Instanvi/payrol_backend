@@ -33,6 +33,7 @@ function mapEmployee(row: typeof employees.$inferSelect) {
     mobileAccountValid: row.mobileAccountValid ?? undefined,
     mobileAccountValidatedAt: row.mobileAccountValidatedAt ?? undefined,
     mobileAccountValidationError: row.mobileAccountValidationError ?? undefined,
+    mobileAccountHolderName: row.mobileAccountHolderName ?? undefined,
     accountChecked: row.mobileAccountValid !== null && row.mobileAccountValid !== undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -96,6 +97,7 @@ export const employeesService = {
       mobileAccountValid: null,
       mobileAccountValidatedAt: null,
       mobileAccountValidationError: null,
+      mobileAccountHolderName: null,
       createdAt: now,
       updatedAt: now,
     }
@@ -151,6 +153,7 @@ export const employeesService = {
               mobileAccountValid: null,
               mobileAccountValidatedAt: null,
               mobileAccountValidationError: null,
+              mobileAccountHolderName: null,
             }
           : {}),
         ...(input.department !== undefined
@@ -228,6 +231,7 @@ export const employeesService = {
         mobileAccountValid: null,
         mobileAccountValidatedAt: null,
         mobileAccountValidationError: null,
+        mobileAccountHolderName: null,
         createdAt: now,
         updatedAt: now,
       })

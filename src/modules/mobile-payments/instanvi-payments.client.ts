@@ -11,6 +11,7 @@ import type {
   InstanviMakePaymentData,
   InstanviPaymentRow,
   InstanviPaymentType,
+  InstanviProvider,
   InstanviVerifyActiveData,
   InstanviVerifyBasicInfoData,
 } from "./instanvi-payments.types"
@@ -41,9 +42,13 @@ function parseEnvelopeError<T>(
 
 function unwrapEnvelope<T>(body: InstanviEnvelope<T>): T {
   if (body.status_code >= 400) {
+    const statusCode =
+      body.status_code >= 400 && body.status_code < 600
+        ? body.status_code
+        : 502
     throw new AppError(
       body.message || parseEnvelopeError(body.status_code, body),
-      body.status_code >= 500 ? 502 : body.status_code,
+      statusCode,
       "INSTANVI_PAYMENTS_FAILED"
     )
   }
@@ -151,33 +156,33 @@ export function createInstanviClient(credentials: InstanviClientCredentials) {
       })
     },
 
-    async verifyAccountHolderActive(
+    verifyAccountHolderActive(
       phoneNumber: string,
-      type: InstanviPaymentType
+      type: InstanviPaymentType,
+      provider?: InstanviProvider
     ) {
-      const data = await request<InstanviVerifyActiveData>(
+      const params: Record<string, string> = { phoneNumber, type }
+      if (provider) params.provider = provider
+
+      return request<InstanviVerifyActiveData>(
         "get",
         "/verify-account-holder-active",
-        { params: { phoneNumber, type } }
+        { params }
       )
-
-      if (!data.result) {
-        throw AppError.validation(
-          "Mobile money account is not registered or not active for this phone number"
-        )
-      }
-
-      return data
     },
 
     verifyAccountHolderBasicInfo(
       phoneNumber: string,
-      type: InstanviPaymentType
+      type: InstanviPaymentType,
+      provider?: InstanviProvider
     ) {
+      const params: Record<string, string> = { phoneNumber, type }
+      if (provider) params.provider = provider
+
       return request<InstanviVerifyBasicInfoData>(
         "get",
         "/verify-account-holder-basic-info",
-        { params: { phoneNumber, type } }
+        { params }
       )
     },
   }

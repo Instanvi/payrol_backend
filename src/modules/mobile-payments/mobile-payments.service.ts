@@ -16,6 +16,7 @@ import {
   getPaymentQueue,
 } from "../../queues/payment.queue"
 import { syncLinkedPayrollTransaction } from "../payments/payroll-mobile-sync"
+import { verifyMobileAccount } from "./account-verification.service"
 import { companyIntegrationsService } from "../integrations/company-integrations.service"
 import type { InstanviProvider } from "./instanvi-payments.types"
 import {
@@ -50,31 +51,16 @@ function resolveProvider(
 
 export const mobilePaymentsService = {
   async validatePayeeAccount(companyId: string, phone: string) {
-    const carrierCheck = validateCarrierForMobileMoney(phone)
-    if (!carrierCheck.ok) {
-      throw AppError.validation(carrierCheck.message)
-    }
-
-    const msisdn = carrierCheck.parsed.national
-    const provider = resolveProvider(msisdn)
-
-    await paymentLogService.info({
-      companyId,
-      event: "mobile_payments.account.validated",
-      message: "Payee mobile money account validated by carrier",
-      metadata: {
-        phone: msisdn,
-        carrier: carrierCheck.parsed.carrier,
-        provider,
-      },
-    })
+    const verified = await verifyMobileAccount(companyId, phone, "DEPOSIT")
 
     return {
-      phone: msisdn,
-      e164: carrierCheck.parsed.e164,
-      carrier: carrierCheck.parsed.carrier,
-      provider,
-      active: true as const,
+      phone: verified.phone,
+      e164: verified.e164,
+      carrier: verified.carrier,
+      provider: verified.provider,
+      active: verified.active,
+      verificationScope: verified.verificationScope,
+      accountHolderName: verified.accountHolderName ?? undefined,
     }
   },
 
