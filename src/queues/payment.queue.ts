@@ -1,5 +1,7 @@
 import { Queue } from "bullmq"
+import IORedis from "ioredis"
 
+import { logger } from "../common/logger"
 import { env } from "../config/env"
 
 export const PAYMENT_QUEUE_NAME = "payment-processing"
@@ -23,12 +25,31 @@ export type DisburseJobData = {
 
 export type DisburseJobName = "disburse"
 
-export const redisConnection = {
-  url: env.REDIS_URL,
-  maxRetriesPerRequest: null,
-  lazyConnect: true,
-  enableOfflineQueue: false,
-} as const
+let sharedRedis: IORedis | null = null
+
+export function getRedisConnection() {
+  if (!sharedRedis) {
+    const url = env.REDIS_URL
+    sharedRedis = new IORedis(url, {
+      maxRetriesPerRequest: null,
+      ...(url.startsWith("rediss://") ? { tls: {} } : {}),
+    })
+
+    sharedRedis.on("error", (err) => {
+      logger.error({ err: err.message }, "Redis connection error")
+    })
+  }
+
+  return sharedRedis
+}
+
+export async function verifyRedisConnection() {
+  const redis = getRedisConnection()
+  const pong = await redis.ping()
+  if (pong !== "PONG") {
+    throw new Error(`Redis ping failed: ${pong}`)
+  }
+}
 
 let paymentQueueInstance: Queue<
   DisburseJobData,
@@ -43,7 +64,7 @@ export function getPaymentQueue() {
       void,
       DisburseJobName
     >(PAYMENT_QUEUE_NAME, {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       defaultJobOptions: {
         attempts: env.PAYMENT_QUEUE_ATTEMPTS,
         backoff: { type: "exponential", delay: 5000 },

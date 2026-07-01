@@ -109,7 +109,21 @@ export async function syncPayRunProcessingTransactions(
         .where(eq(mobilePaymentTransactions.payrollTransactionId, payrollTxn.id))
     )
 
-    if (!mobileTxn?.externalReferenceId) {
+    if (!mobileTxn) {
+      const now = nowIso()
+      await db
+        .update(payrollTransactions)
+        .set({
+          status: "failed",
+          failureReason:
+            "Payment was queued but never sent to Instanvi. The disbursement worker did not run — check Redis and retry.",
+          updatedAt: now,
+        })
+        .where(eq(payrollTransactions.id, payrollTxn.id))
+      continue
+    }
+
+    if (!mobileTxn.externalReferenceId) {
       continue
     }
 

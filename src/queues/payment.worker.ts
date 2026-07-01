@@ -7,7 +7,7 @@ import { mobilePaymentsService } from "../modules/mobile-payments/mobile-payment
 import { syncLinkedPayrollTransaction } from "../modules/payments/payroll-mobile-sync"
 import {
   PAYMENT_QUEUE_NAME,
-  redisConnection,
+  getRedisConnection,
   type DisburseJobData,
   type DisburseJobName,
 } from "./payment.queue"
@@ -64,10 +64,14 @@ export function startPaymentWorker() {
       })
     },
     {
-      connection: redisConnection,
+      connection: getRedisConnection(),
       concurrency: env.PAYMENT_QUEUE_CONCURRENCY,
     }
   )
+
+  worker.on("error", (error) => {
+    logger.error({ err: error }, "Payment worker error")
+  })
 
   worker.on("failed", (job, error) => {
     logger.error(
