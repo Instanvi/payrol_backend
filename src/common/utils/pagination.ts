@@ -10,6 +10,8 @@ export const listQuerySchema = z.object({
   role: z.string().optional(),
   payRunId: z.string().optional(),
   level: z.string().optional(),
+  mobileAccountStatus: z.enum(["valid", "invalid", "unchecked"]).optional(),
+  carrier: z.string().optional(),
 })
 
 export type ListQuery = z.infer<typeof listQuerySchema>
