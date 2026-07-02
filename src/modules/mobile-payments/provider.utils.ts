@@ -23,8 +23,17 @@ export function mapProviderStatus(status: string): InternalPaymentStatus {
   switch (status.toUpperCase()) {
     case "SUCCESS":
     case "SUCCESSFUL":
+    case "SUCCEEDED":
+    case "COMPLETED":
+    case "COMPLETE":
+    case "PAID":
       return "successful"
     case "FAILED":
+    case "FAILURE":
+    case "ERROR":
+    case "REJECTED":
+    case "CANCELLED":
+    case "CANCELED":
       return "failed"
     default:
       return "pending"

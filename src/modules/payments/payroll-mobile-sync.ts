@@ -47,6 +47,46 @@ async function reconcilePayRunStatus(payRunId: string, companyId: string) {
     .where(and(eq(payRuns.id, payRunId), eq(payRuns.companyId, companyId)))
 }
 
+async function syncProcessingPayrollRow(
+  payrollTxn: typeof payrollTransactions.$inferSelect,
+  companyId: string
+) {
+  const mobileTxn = await findOne(
+    db
+      .select()
+      .from(mobilePaymentTransactions)
+      .where(eq(mobilePaymentTransactions.payrollTransactionId, payrollTxn.id))
+      .orderBy(desc(mobilePaymentTransactions.createdAt))
+  )
+
+  if (!mobileTxn) {
+    const now = nowIso()
+    await db
+      .update(payrollTransactions)
+      .set({
+        status: "failed",
+        failureReason:
+          "Payment was queued but never sent to Instanvi. The disbursement worker did not run — check Redis and retry.",
+        updatedAt: now,
+      })
+      .where(eq(payrollTransactions.id, payrollTxn.id))
+    return
+  }
+
+  if (!mobileTxn.externalReferenceId) {
+    return
+  }
+
+  try {
+    await mobilePaymentsService.syncStatus(
+      mobileTxn.externalReferenceId,
+      companyId
+    )
+  } catch {
+    // Provider may be temporarily unavailable; leave as processing.
+  }
+}
+
 export async function syncLinkedPayrollTransaction(
   payrollTransactionId: string,
   status: InternalPaymentStatus,
@@ -102,41 +142,36 @@ export async function syncPayRunProcessingTransactions(
     )
 
   for (const payrollTxn of rows) {
-    const mobileTxn = await findOne(
-      db
-        .select()
-        .from(mobilePaymentTransactions)
-        .where(eq(mobilePaymentTransactions.payrollTransactionId, payrollTxn.id))
-        .orderBy(desc(mobilePaymentTransactions.createdAt))
-    )
-
-    if (!mobileTxn) {
-      const now = nowIso()
-      await db
-        .update(payrollTransactions)
-        .set({
-          status: "failed",
-          failureReason:
-            "Payment was queued but never sent to Instanvi. The disbursement worker did not run — check Redis and retry.",
-          updatedAt: now,
-        })
-        .where(eq(payrollTransactions.id, payrollTxn.id))
-      continue
-    }
-
-    if (!mobileTxn.externalReferenceId) {
-      continue
-    }
-
-    try {
-      await mobilePaymentsService.syncStatus(
-        mobileTxn.externalReferenceId,
-        companyId
-      )
-    } catch {
-      // Provider may be temporarily unavailable; leave as processing.
-    }
+    await syncProcessingPayrollRow(payrollTxn, companyId)
   }
 
   await reconcilePayRunStatus(payRunId, companyId)
+}
+
+/** Poll Instanvi for all in-flight payroll transactions in a company. */
+export async function syncCompanyProcessingTransactions(companyId: string) {
+  const rows = await db
+    .select()
+    .from(payrollTransactions)
+    .where(
+      and(
+        eq(payrollTransactions.companyId, companyId),
+        eq(payrollTransactions.status, "processing")
+      )
+    )
+
+  if (rows.length === 0) {
+    return
+  }
+
+  const payRunIds = new Set<string>()
+
+  for (const payrollTxn of rows) {
+    payRunIds.add(payrollTxn.payRunId)
+    await syncProcessingPayrollRow(payrollTxn, companyId)
+  }
+
+  for (const payRunId of payRunIds) {
+    await reconcilePayRunStatus(payRunId, companyId)
+  }
 }

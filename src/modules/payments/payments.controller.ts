@@ -8,7 +8,7 @@ import { getRouteParam } from "../../common/utils/route-param"
 import { sendCreated, sendPaginated, sendSuccess } from "../../common/utils/response"
 import { listQuerySchema, paginateList } from "../../common/utils/pagination"
 import { transactionsService } from "../transactions/transactions.service"
-import { syncPayRunProcessingTransactions } from "./payroll-mobile-sync"
+import { syncCompanyProcessingTransactions, syncPayRunProcessingTransactions } from "./payroll-mobile-sync"
 import { paymentsBulkService } from "./payments-bulk.service"
 import { paymentsService } from "./payments.service"
 
@@ -17,6 +17,7 @@ export const listPayments = asyncHandler(async (req: Request, res: Response) => 
   const query = listQuerySchema.parse(req.query)
   const projectId =
     typeof req.query.projectId === "string" ? req.query.projectId : undefined
+  await syncCompanyProcessingTransactions(auth.companyId)
   const items = await paymentsService.list(auth.companyId, projectId)
   const result = paginateList(items, query, {
     searchKeys: ["reference", "payPeriod"],
@@ -27,7 +28,9 @@ export const listPayments = asyncHandler(async (req: Request, res: Response) => 
 
 export const getPayment = asyncHandler(async (req: Request, res: Response) => {
   const auth = requireTenantAuth(req)
-  const payment = await paymentsService.getById(getRouteParam(req, "id"), auth.companyId)
+  const payRunId = getRouteParam(req, "id")
+  await syncPayRunProcessingTransactions(payRunId, auth.companyId)
+  const payment = await paymentsService.getById(payRunId, auth.companyId)
   sendSuccess(res, payment)
 })
 

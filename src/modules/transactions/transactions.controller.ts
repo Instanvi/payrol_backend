@@ -5,6 +5,7 @@ import { requireTenantAuth } from "../../common/utils/auth-context"
 import { listQuerySchema, paginateList } from "../../common/utils/pagination"
 import { sendPaginated } from "../../common/utils/response"
 import { transactionsService } from "./transactions.service"
+import { syncCompanyProcessingTransactions } from "../payments/payroll-mobile-sync"
 
 function matchesMobileAccountStatus(
   valid: boolean | null | undefined,
@@ -21,6 +22,7 @@ export const listTransactions = asyncHandler(async (req: Request, res: Response)
   const query = listQuerySchema.parse(req.query)
   const projectId =
     typeof req.query.projectId === "string" ? req.query.projectId : undefined
+  await syncCompanyProcessingTransactions(auth.companyId)
   const items = await transactionsService.list(auth.companyId, projectId)
   const result = paginateList(items, query, {
     searchKeys: [
