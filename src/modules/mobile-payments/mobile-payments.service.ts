@@ -18,6 +18,7 @@ import {
 import { syncLinkedPayrollTransaction } from "../payments/payroll-mobile-sync"
 import { verifyMobileAccount } from "./account-verification.service"
 import { companyIntegrationsService } from "../integrations/company-integrations.service"
+import { createInstanviClient } from "./instanvi-payments.client"
 import type { InstanviProvider } from "./instanvi-payments.types"
 import {
   carrierToProvider,
@@ -288,7 +289,9 @@ export const mobilePaymentsService = {
     input: DisburseInput,
     meta?: ExecuteDisburseMeta
   ) {
-    const instanvi = await companyIntegrationsService.getInstanviClient(companyId)
+    const credentials =
+      await companyIntegrationsService.getInstanviCredentials(companyId)
+    const instanvi = createInstanviClient(credentials)
     const carrierCheck = validateCarrierForMobileMoney(input.phone)
     if (!carrierCheck.ok) {
       throw AppError.validation(carrierCheck.message)
@@ -309,6 +312,7 @@ export const mobilePaymentsService = {
         idempotencyKey: meta?.idempotencyKey,
         amount: input.amount,
         provider,
+        credentialSource: credentials.source,
       },
     })
 

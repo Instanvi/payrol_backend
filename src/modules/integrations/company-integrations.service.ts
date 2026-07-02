@@ -3,9 +3,9 @@ import { eq } from "drizzle-orm"
 import { paymentLogService } from "../../common/logging/payment-log.service"
 import { AppError } from "../../common/errors/AppError"
 import {
-  decryptSecret,
-  encryptSecret,
-} from "../../common/utils/secret-crypto"
+  readIntegrationSecret,
+  storeIntegrationSecret,
+} from "../../common/utils/integration-secrets"
 import { nowIso } from "../../common/utils/id"
 import { env } from "../../config/env"
 import { db } from "../../db"
@@ -79,7 +79,7 @@ export const companyIntegrationsService = {
     await db
       .update(companies)
       .set({
-        instanviApiKeyEncrypted: encryptSecret(apiKey),
+        instanviApiKeyEncrypted: storeIntegrationSecret(apiKey),
         instanviApiKeyLast4: maskLast4(apiKey),
         instanviLocationId: locationId,
         instanviConnectedAt: now,
@@ -138,21 +138,40 @@ export const companyIntegrationsService = {
 
     if (!row) throw AppError.notFound("Company not found")
 
+    const envApiKey = env.INSTANVI_API_KEY?.trim()
+    const envFallback =
+      envApiKey && isValidInstanviApiKey(envApiKey)
+        ? {
+            apiKey: envApiKey,
+            locationId: resolveLocationId(row.instanviLocationId, true),
+            source: "env" as const,
+          }
+        : null
+
     if (row.instanviApiKeyEncrypted?.trim()) {
-      return {
-        apiKey: decryptSecret(row.instanviApiKeyEncrypted),
-        locationId: resolveLocationId(row.instanviLocationId),
-        source: "company" as const,
+      const apiKey = readIntegrationSecret(row.instanviApiKeyEncrypted)
+      if (isValidInstanviApiKey(apiKey)) {
+        return {
+          apiKey,
+          locationId: resolveLocationId(row.instanviLocationId),
+          source: "company" as const,
+        }
       }
+
+      await paymentLogService.warn({
+        companyId,
+        event: "integrations.instanvi.invalid_stored_key",
+        message:
+          "Stored Instanvi API key is missing or invalid after read — falling back to server env key if configured",
+        metadata: {
+          apiKeyLast4: row.instanviApiKeyLast4 ?? undefined,
+          hasEnvFallback: Boolean(envFallback),
+        },
+      })
     }
 
-    const envApiKey = env.INSTANVI_API_KEY?.trim()
-    if (envApiKey && isValidInstanviApiKey(envApiKey)) {
-      return {
-        apiKey: envApiKey,
-        locationId: resolveLocationId(row.instanviLocationId, true),
-        source: "env" as const,
-      }
+    if (envFallback) {
+      return envFallback
     }
 
     throw AppError.validation(

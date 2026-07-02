@@ -134,7 +134,13 @@ export function createInstanviClient(credentials: InstanviClientCredentials) {
       const message = isAxiosError(error)
         ? parseEnvelopeError(error.response?.status ?? 0, error.response?.data)
         : "Instanvi payments request failed"
-      throw new AppError(message, 502, "INSTANVI_PAYMENTS_FAILED")
+
+      const hint =
+        message.includes("401") || message.toLowerCase().includes("unauthorized")
+          ? " Check the Instanvi API key in Settings matches a valid app_ key, or set INSTANVI_API_KEY on the server."
+          : ""
+
+      throw new AppError(message + hint, 502, "INSTANVI_PAYMENTS_FAILED")
     }
   }
 
