@@ -14,17 +14,20 @@ function truncateJson(value: unknown, max = 2000) {
 morgan.token("req-body", (req: Request) => truncateJson(req.body))
 
 const devFormat =
-  ":method :url :status :res[content-length] - :response-time ms req=:req-body"
+  ":date[iso] :method :url :status :res[content-length] - :response-time ms req=:req-body"
 
 const productionFormat =
-  ":remote-addr :method :url :status :res[content-length] - :response-time ms"
+  ":date[iso] :remote-addr :method :url :status :res[content-length] - :response-time ms"
 
 export const httpLogger = morgan(
   env.NODE_ENV === "production" ? productionFormat : devFormat,
   {
     stream: {
       write: (line) => {
-        logger.info({ type: "http.incoming" }, line.trim())
+        logger.info(
+          { type: "http.incoming", timestamp: new Date().toISOString() },
+          line.trim()
+        )
       },
     },
   }

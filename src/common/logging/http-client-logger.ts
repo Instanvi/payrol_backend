@@ -34,11 +34,16 @@ function truncateJson(value: unknown, max = 2000) {
   return raw.length > max ? `${raw.slice(0, max)}…` : raw
 }
 
+function logTimestamp() {
+  return new Date().toISOString()
+}
+
 export function attachHttpClientLogging(client: AxiosInstance, name: string) {
   client.interceptors.request.use((config) => {
     logger.info(
       {
         type: "http.outgoing",
+        timestamp: logTimestamp(),
         client: name,
         direction: "request",
         method: config.method?.toUpperCase(),
@@ -57,6 +62,7 @@ export function attachHttpClientLogging(client: AxiosInstance, name: string) {
       logger.info(
         {
           type: "http.outgoing",
+          timestamp: logTimestamp(),
           client: name,
           direction: "response",
           method: response.config.method?.toUpperCase(),
@@ -73,6 +79,7 @@ export function attachHttpClientLogging(client: AxiosInstance, name: string) {
         logger.warn(
           {
             type: "http.outgoing",
+            timestamp: logTimestamp(),
             client: name,
             direction: "response",
             method: error.config?.method?.toUpperCase(),
